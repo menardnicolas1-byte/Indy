@@ -1,10 +1,10 @@
 // /api/claude.js
-// Proxy serveur entre l'app INDY et l'API Anthropic.
-// La clé API ANTHROPIC_API_KEY reste cote serveur, jamais exposee au navigateur.
+// Route serverless Vercel — proxy sécurisé vers l'API Anthropic
+// La clé API reste côté serveur, jamais exposée au navigateur.
 
 export default async function handler(req, res) {
-  // CORS : autorise le front
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // --- CORS (autorise ton propre domaine Vercel) ---
+  res.setHeader("Access-Control-Allow-Origin", "*"); // en prod : mets ton domaine exact
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -13,33 +13,27 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed",
-      content: [{ type: "text", text: "Methode non autorisee." }],
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // --- Vérifie que la clé est bien configurée côté Vercel ---
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.error("ANTHROPIC_API_KEY manquante dans les variables d'environnement Vercel");
     return res.status(500).json({
       error: "Configuration manquante",
-      content: [{ type: "text", text: "Service indisponible. Contacte le support." }],
+      content: [{ type: "text", text: "Service temporairement indisponible." }],
     });
   }
 
   try {
-    // Recuperer le body (peut arriver en string ou en objet selon Vercel)
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    // --- Extrait le payload envoyé par le front ---
+    const { messages, system, max_tokens = 1024, model = "claude-haiku-4-5-20251001" } = req.body || {};
 
-    if (!body || !body.messages || !Array.isArray(body.messages)) {
-      return res.status(400).json({
-        error: "Requete invalide",
-        content: [{ type: "text", text: "Requete invalide." }],
-      });
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "messages[] requis" });
     }
 
-    // Relais vers Anthropic en ajoutant la cle cote serveur
+    // --- Relaie la requête vers Anthropic ---
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -47,16 +41,22 @@ export default async function handler(req, res) {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        model,
+        max_tokens,
+        system,
+        messages,
+      }),
     });
 
     const data = await anthropicRes.json();
 
+    // --- Gestion des erreurs côté Anthropic (429, 401, etc.) ---
     if (!anthropicRes.ok) {
-      console.error("Anthropic API error:", anthropicRes.status, data);
+      console.error("Anthropic API error:", data);
       return res.status(anthropicRes.status).json({
         error: data?.error?.message || "Erreur API",
-        content: [{ type: "text", text: "Le service IA rencontre un souci. Reessaie dans un instant." }],
+        content: [{ type: "text", text: "Le service IA rencontre un souci. Réessaie dans un instant." }],
       });
     }
 
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
     console.error("Proxy error:", err);
     return res.status(500).json({
       error: "Erreur serveur",
-      content: [{ type: "text", text: "Erreur de connexion. Reessaie." }],
+      content: [{ type: "text", text: "Erreur de connexion. Réessaie." }],
     });
   }
 }
