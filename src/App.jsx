@@ -1178,12 +1178,15 @@ function Logo({size=70,anim=false}){
 }
 
 // --- HEADER -------------------------------------------------------------------
-function Hdr({sub,accent="#FF6B35",right}){
+function Hdr({sub,accent="#FF6B35",right,onBack}){
   return(
-    <div style={{padding:"16px 20px 13px",borderBottom:"1px solid #0F0F0F",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <div>
-        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,letterSpacing:4,color:accent}}>INDY</div>
-        <div style={{fontSize:9,color:"#888",letterSpacing:2.5,marginTop:1}}>{sub}</div>
+    <div style={{padding:"16px 20px 13px",borderBottom:"1px solid #0F0F0F",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,flex:1,minWidth:0}}>
+        {onBack&&<button onClick={onBack} style={{background:"none",border:"1px solid #1E1E1E",color:"#888",fontSize:16,width:34,height:34,borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0}}>←</button>}
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,letterSpacing:4,color:accent}}>INDY</div>
+          <div style={{fontSize:9,color:"#888",letterSpacing:2.5,marginTop:1}}>{sub}</div>
+        </div>
       </div>
       {right}
     </div>
@@ -1386,7 +1389,7 @@ function EditPanel({project,isNew,onClose,onSave,onDelete}){
 }
 
 // --- COACH --------------------------------------------------------------------
-function Coach({projects,setProjects,activeId,setActiveId}){
+function Coach({projects,setProjects,activeId,setActiveId,plan,goBack}){
   const [si,setSi]=useState(0);const [tip,setTip]=useState(null);
   const proj=projects.find(p=>p.id===activeId)||projects[0];
   if(!proj)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",color:"#999",fontFamily:"'Inter',sans-serif",flexDirection:"column",gap:16,background:"#080808"}}><div style={{fontSize:32}}>🎵</div><div style={{fontSize:12}}>Aucun titre en cours.</div></div>;
@@ -1395,7 +1398,7 @@ function Coach({projects,setProjects,activeId,setActiveId}){
   const toggle=(tid)=>{const nc={...checks,[tid]:!checks[tid]};const np={};STAGES.forEach(s=>{const ts=TASKS[s.id]||[];np[s.id]=ts.length?Math.round(ts.filter(t=>nc[t.id]).length/ts.length*100):0;});setProjects(ps=>ps.map(p=>p.id===proj.id?{...p,checks:nc,progress:np}:p));};
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="COACH PARCOURS" right={<select value={proj.id} onChange={e=>setActiveId(Number(e.target.value))} style={{background:"#111",border:"1px solid #1A1A1A",color:"#888",fontSize:11,padding:"6px 10px",borderRadius:6,width:"auto"}}>{projects.map(p=><option key={p.id} value={p.id}>{p.titre}</option>)}</select>}/>
+      <Hdr sub="COACH PARCOURS" onBack={goBack} right={<select value={proj.id} onChange={e=>setActiveId(Number(e.target.value))} style={{background:"#111",border:"1px solid #1A1A1A",color:"#888",fontSize:11,padding:"6px 10px",borderRadius:6,width:"auto"}}>{projects.map(p=><option key={p.id} value={p.id}>{p.titre}</option>)}</select>}/>
       <div style={{padding:"10px 18px",borderBottom:"1px solid #111",display:"flex",alignItems:"center",gap:8}}>
         <div style={{width:8,height:8,borderRadius:"50%",background:proj.color}}/><span style={{fontSize:11,color:"#888"}}>{proj.titre}</span><span style={{fontSize:10,color:"#888"}}>· {proj.artiste}</span>
         {proj.urgent&&<span className="pill" style={{background:`${proj.color}15`,color:proj.color,marginLeft:"auto"}}>⚡ {proj.urgent}</span>}
@@ -1473,7 +1476,7 @@ function PressKit({projects,plan,goPlan}){
   if(plan==="free"){
     return(
       <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-        <Hdr sub="PRESS KIT GENERATOR"/>
+        <Hdr sub="PRESS KIT GENERATOR" onBack={goBack}/>
         <Gate onUpgrade={goPlan} label="Génère bio, email booking et pitch Spotify en quelques secondes avec l'IA."/>
       </div>
     );
@@ -1486,7 +1489,7 @@ function PressKit({projects,plan,goPlan}){
   };
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="PRESS KIT GENERATOR" right={plan==="free"&&<div className="pill" style={{background:"#111",border:"1px solid #222",color:left>0?"#FFD43B":"#F03E3E"}}>{left>0?`${left} restant`:"Limite"}</div>}/>
+      <Hdr sub="PRESS KIT GENERATOR" onBack={goBack} right={plan==="free"&&<div className="pill" style={{background:"#111",border:"1px solid #222",color:left>0?"#FFD43B":"#F03E3E"}}>{left>0?`${left} restant`:"Limite"}</div>}/>
       {phase==="form"&&(
         <div style={{padding:"18px 18px 0"}}>
           {projects.length>0&&<div style={{marginBottom:16}}><div style={{fontSize:9,color:"#888",letterSpacing:2,marginBottom:8}}>REMPLIR DEPUIS UN TITRE</div><div style={{display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none"}}>{projects.map(p=><button key={p.id} onClick={()=>setData({nom:p.artiste,genre:p.genre,titre:p.titre})} style={{background:"#0D0D0D",border:`1px solid ${p.color}33`,color:"#777",fontFamily:"'Inter',sans-serif",fontSize:10,padding:"5px 11px",borderRadius:20,cursor:"pointer",flexShrink:0}}>{p.artiste}</button>)}</div></div>}
@@ -1523,7 +1526,7 @@ function Booking({plan,goPlan}){
   const filtered=SALLES.filter(s=>{const q=search.toLowerCase();if(q&&!s.nom.toLowerCase().includes(q)&&!s.ville.toLowerCase().includes(q)&&!s.genres.some(g=>g.includes(q)))return false;if(filters.smac&&!s.smac)return false;if(filters.sub&&!s.subv)return false;if(filters.res&&!s.res)return false;if(filters.regions.length&&!filters.regions.includes(s.region))return false;if(filters.genres.length&&!filters.genres.some(g=>s.genres.includes(g)))return false;return true;});
   if(plan==="free")return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="MODULE BOOKING" accent="#20C997"/>
+      <Hdr sub="MODULE BOOKING" accent="#20C997" onBack={goBack}/>
       <div style={{padding:"40px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
         <div style={{fontSize:44}}>🎤</div>
         <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:3}}>MODULE BOOKING</div>
@@ -1538,7 +1541,7 @@ function Booking({plan,goPlan}){
   );
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="MODULE BOOKING" accent="#20C997"/>
+      <Hdr sub="MODULE BOOKING" accent="#20C997" onBack={goBack}/>
       <div style={{display:"flex",borderBottom:"1px solid #111"}}>
         <button className={`tab ${tab==="salles"?"on":""}`} onClick={()=>setTab("salles")}>🏛️ Salles ({SALLES.length})</button>
         <button className={`tab ${tab==="oppos"?"on":""}`} onClick={()=>setTab("oppos")}>⚡ Opportunités ({OPPOS.length})</button>
@@ -1664,7 +1667,7 @@ function EmailGen({salle,onClose}){
 }
 
 // --- ANNUAIRE -----------------------------------------------------------------
-function Annuaire(){
+function Annuaire({goBack}){
   const [section,setSection]=useState(null);const [search,setSearch]=useState("");const [detail,setDetail]=useState(null);
   const SECS=[
     {id:"salles",icon:"🎤",label:"Salles de concert",color:"#FF6B35",data:SALLES,count:SALLES.length,desc:"SMAC, salles privées, clubs"},
@@ -1677,7 +1680,7 @@ function Annuaire(){
   const getItems=()=>{if(!sec)return[];const q=search.toLowerCase();return sec.data.filter(i=>{if(!q)return true;return(i.nom||"").toLowerCase().includes(q)||(i.ville||"").toLowerCase().includes(q)||((i.tags||i.genres||[]).some(t=>(t||"").toLowerCase().includes(q)));});};
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="ANNUAIRE" accent="#C8A96E" right={section&&<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>{setSection(null);setSearch("");}}>← Retour</button>}/>
+      <Hdr sub="ANNUAIRE" accent="#C8A96E" onBack={goBack} right={section&&<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>{setSection(null);setSearch("");}}>← Retour</button>}/>
       {!section&&(
         <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:10}}>
           <div style={{background:"#0D0D0D",border:"1px solid #C8A96E18",borderRadius:8,padding:"11px 14px",fontSize:11,color:"#555",lineHeight:1.6,marginBottom:4}}><span style={{color:"#C8A96E",fontSize:9,letterSpacing:2,display:"block",marginBottom:3}}>◆ ANNUAIRE INDY</span>Studios, salles, résidences, tremplins  -  toutes les ressources pour créer et te développer.</div>
@@ -1751,14 +1754,14 @@ function Bibliotheque({plan,goPlan}){
 
   if(plan==="free")return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="BIBLIOTHEQUE" accent="#C8A96E"/>
+      <Hdr sub="BIBLIOTHEQUE" accent="#C8A96E" onBack={goBack}/>
       <Gate onUpgrade={goPlan} label="Acces a 24 documents juridiques et pratiques rediges pour les artistes independants." features={["Contrats (featuring, split sheet)","Fiches SACEM & ISRC","Checklist sortie complete","Templates press kit & pitch Spotify","Fiches financement CNM, ADAMI","Guides statuts juridiques"]}/>
     </div>
   );
 
   if(doc){return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="BIBLIOTHÈQUE" accent="#C8A96E" right={<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>setDoc(null)}>← Retour</button>}/>
+      <Hdr sub="BIBLIOTHÈQUE" accent="#C8A96E" onBack={()=>setDoc(null)} right={<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>setDoc(null)}>← Retour</button>}/>
       <div style={{padding:"16px 18px 40px"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
           <span style={{fontSize:24}}>{doc.icon}</span>
@@ -1775,7 +1778,7 @@ function Bibliotheque({plan,goPlan}){
 
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="BIBLIOTHÈQUE" accent="#C8A96E"/>
+      <Hdr sub="BIBLIOTHÈQUE" accent="#C8A96E" onBack={goBack}/>
       <div style={{display:"flex",borderBottom:"1px solid #111"}}>
         <button className={`tab ${!tabAnn?"on":""}`} onClick={()=>setTabAnn(false)}>📚 Documents ({BIBLIO_DOCS.length})</button>
         <button className={`tab ${tabAnn?"on":""}`} onClick={()=>setTabAnn(true)}>🔗 Annuaires ({ANNUAIRES_EXT.length})</button>
@@ -1848,7 +1851,7 @@ function Subventions({plan,goPlan}){
   if(plan==="free"){
     return(
       <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-        <Hdr sub="FINANCEMENT & DÉMARCHES" accent="#F03E3E"/>
+        <Hdr sub="FINANCEMENT & DÉMARCHES" accent="#F03E3E" onBack={goBack}/>
         <Gate onUpgrade={goPlan} label="Matching personnalisé avec les 9+ aides françaises (CNM, SACEM, ADAMI...) + liens directs vers les formulaires officiels."/>
       </div>
     );
@@ -1860,7 +1863,7 @@ function Subventions({plan,goPlan}){
   const top=results.filter(a=>a.score>=70);const possible=results.filter(a=>a.score>=40&&a.score<70);
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="FINANCEMENT & DÉMARCHES" accent="#F03E3E" right={<div style={{display:"flex",gap:8}}>
+      <Hdr sub="FINANCEMENT & DÉMARCHES" accent="#F03E3E" onBack={goBack} right={<div style={{display:"flex",gap:8}}>
         {phase==="results"&&<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>{setPhase("q");setAns({});setQi(0);}}>↺</button>}
         <button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10,borderColor:showD?"#F03E3E":"#1E1E1E",color:showD?"#F03E3E":"#555"}} onClick={()=>setShowD(!showD)}>{showD?"Aides":"Démarches"}</button>
       </div>}/>
@@ -1936,13 +1939,13 @@ function AideCard({aide,expanded,onToggle}){
 }
 
 // --- RÉSEAU -------------------------------------------------------------------
-function Reseau({user}){
+function Reseau({user,plan,goPlan,goBack}){
   const [annonces,setAnnonces]=useState(ANNONCES_INIT);const [showForm,setShowForm]=useState(false);const [filter,setFilter]=useState("tous");const [newA,setNewA]=useState({type:"cherche",role:"",genre:"",ville:"",desc:"",tags:""});
   const filtered=annonces.filter(a=>filter==="tous"||a.type===filter);
   const publish=()=>{if(!newA.role||!newA.desc)return;setAnnonces(prev=>[{id:Date.now(),...newA,nom:user?.name||"Artiste INDY",avatar:"🎵",date:"À l'instant",tags:newA.tags.split(",").map(t=>t.trim()).filter(Boolean),color:"#FF6B35"},...prev]);setShowForm(false);setNewA({type:"cherche",role:"",genre:"",ville:"",desc:"",tags:""});};
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="RÉSEAU" accent="#00C9A7" right={<button onClick={()=>setShowForm(true)} style={{background:"#00C9A7",border:"none",color:"#000",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:2,padding:"8px 14px",borderRadius:20,cursor:"pointer",fontWeight:500}}>+ ANNONCE</button>}/>
+      <Hdr sub="RÉSEAU" accent="#00C9A7" onBack={goBack} right={<button onClick={()=>plan==="free"?goPlan():setShowForm(true)} style={{background:plan==="free"?"#1A1A1A":"#00C9A7",border:"none",color:"#000",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:2,padding:"8px 14px",borderRadius:20,cursor:"pointer",fontWeight:500}}>+ ANNONCE</button>}/>
       <div style={{padding:"10px 18px",display:"flex",gap:6,borderBottom:"1px solid #0F0F0F"}}>
         {[{k:"tous",l:"Tous"},{k:"cherche",l:"Cherche"},{k:"propose",l:"Propose"}].map(f=><button key={f.k} onClick={()=>setFilter(f.k)} style={{background:filter===f.k?"#00C9A715":"none",border:`1px solid ${filter===f.k?"#00C9A7":"#1A1A1A"}`,color:filter===f.k?"#00C9A7":"#444",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"5px 12px",borderRadius:20,cursor:"pointer",textTransform:"uppercase"}}>{f.l}</button>)}
       </div>
@@ -1986,7 +1989,7 @@ function Actualites({plan,goPlan}){
   const [loading,setLoading]=useState(false);const [articles,setArticles]=useState(null);const [query,setQuery]=useState("");const [searched,setSearched]=useState(false);
   if(plan==="free")return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="ACTUALITES" accent="#74C0FC"/>
+      <Hdr sub="ACTUALITES" accent="#74C0FC" onBack={goBack}/>
       <Gate onUpgrade={goPlan} label="Acces aux actualites musicales en temps reel  -  concours, festivals, appels a projets, jams." features={["Concours et appels a projets","Festivals independants","Jams sessions","Actualites subventions","Recherche personnalisee"]}/>
     </div>
   );
@@ -2004,7 +2007,7 @@ function Actualites({plan,goPlan}){
   const getColor=(cat)=>Object.entries(catColors).find(([k])=>cat?.includes(k))?.[1]||"#444";
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="ACTUALITÉS" accent="#74C0FC"/>
+      <Hdr sub="ACTUALITÉS" accent="#74C0FC" onBack={goBack}/>
       <div style={{padding:"12px 18px"}}>
         <div style={{display:"flex",gap:8,marginBottom:10}}><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Rechercher..." onKeyDown={e=>e.key==="Enter"&&search(query)} style={{flex:1}}/><button className="btn" style={{width:"auto",padding:"10px 16px",background:"#74C0FC",color:"#000",fontSize:10}} onClick={()=>search(query)}>↵</button></div>
         <div style={{display:"flex",gap:5,overflowX:"auto",scrollbarWidth:"none",paddingBottom:4}}>
@@ -2031,11 +2034,11 @@ function Actualites({plan,goPlan}){
 }
 
 // --- PROFIL -------------------------------------------------------------------
-function Profil({plan,setPlan,user,goPlan}){
+function Profil({plan,setPlan,user,goPlan,goBack}){
   const PI={free:{l:"GRATUIT",c:"#444"},artiste:{l:"ARTISTE",c:"#FF6B35"},label:{l:"LABEL",c:"#C8A96E"}};const cur=PI[plan];
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="MON COMPTE"/>
+      <Hdr sub="MON COMPTE" onBack={goBack}/>
       <div style={{padding:"20px 18px",display:"flex",flexDirection:"column",gap:14}}>
         <div className="card" style={{padding:18}}><div style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,marginBottom:10}}>PROFIL ARTISTE</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,letterSpacing:3}}>{user?.name||"Artiste"}</div><div style={{fontSize:11,color:"#555",marginTop:2}}>{user?.genre||"Genre non défini"}</div></div>
         <div className="card" style={{padding:18,borderColor:`${cur.c}22`}}><div style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,marginBottom:10}}>PLAN ACTUEL</div><div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,letterSpacing:3,color:cur.c}}>{cur.l}</div><div style={{fontSize:10,color:"#999",marginTop:2}}>{plan==="free"?"Essai 3 jours gratuits":plan==="artiste"?"9,90€ / mois  -  Fondateur":"29,90€ / mois  -  Fondateur"}</div></div><div style={{width:12,height:12,borderRadius:"50%",background:cur.c}}/></div>{plan!=="label"&&<button className="btn" style={{marginTop:14}} onClick={goPlan}>{plan==="free"?"Passer Pro →":"Passer Label →"}</button>}</div>
@@ -2127,6 +2130,7 @@ export default function INDYComplete() {
 
   const goPlan=()=>setScreen("paywall");
   const goCoach=(id)=>{setActiveId(id);setView("coach");};
+  const goBack=()=>setView("dashboard");
 
   const NAV=[
     {id:"dashboard", l:"Board",    i:"⬛"},
@@ -2155,15 +2159,15 @@ export default function INDYComplete() {
       <style>{CSS}</style>
       <div style={{paddingBottom:64}}>
         {view==="dashboard"  &&<Dashboard projects={projects} setProjects={setProjects} goCoach={goCoach} goPlan={goPlan} plan={plan} user={user}/>}
-        {view==="coach"      &&<Coach projects={projects} setProjects={setProjects} activeId={activeId} setActiveId={setActiveId}/>}
-        {view==="presskit"   &&<PressKit projects={projects} plan={plan} goPlan={goPlan}/>}
-        {view==="booking"    &&<Booking plan={plan} goPlan={goPlan}/>}
-        {view==="subventions"&&<Subventions plan={plan} goPlan={goPlan}/>}
-        {view==="bibliotheque"&&<Bibliotheque plan={plan} goPlan={goPlan}/>}
-        {view==="annuaire"   &&<Annuaire/>}
-        {view==="reseau"     &&<Reseau user={user}/>}
-        {view==="actualites" &&<Actualites plan={plan} goPlan={goPlan}/>}
-        {view==="profil"     &&<Profil plan={plan} setPlan={setPlan} user={user} goPlan={goPlan}/>}
+        {view==="coach"      &&<Coach projects={projects} setProjects={setProjects} activeId={activeId} setActiveId={setActiveId} plan={plan} goBack={goBack}/>}
+        {view==="presskit"   &&<PressKit projects={projects} plan={plan} goPlan={goPlan} goBack={goBack}/>}
+        {view==="booking"    &&<Booking plan={plan} goPlan={goPlan} goBack={goBack}/>}
+        {view==="subventions"&&<Subventions plan={plan} goPlan={goPlan} goBack={goBack}/>}
+        {view==="bibliotheque"&&<Bibliotheque plan={plan} goPlan={goPlan} goBack={goBack}/>}
+        {view==="annuaire"   &&<Annuaire goBack={goBack}/>}
+        {view==="reseau"     &&<Reseau user={user} plan={plan} goPlan={goPlan} goBack={goBack}/>}
+        {view==="actualites" &&<Actualites plan={plan} goPlan={goPlan} goBack={goBack}/>}
+        {view==="profil"     &&<Profil plan={plan} setPlan={setPlan} user={user} goPlan={goPlan} goBack={goBack}/>}
       </div>
 
       {/* Menu Plus */}
@@ -2181,9 +2185,9 @@ export default function INDYComplete() {
       )}
 
       {/* Chatbot bouton flottant */}
-      {!showChat&&(
-        <button onClick={()=>plan==="free"?goPlan():setShowChat(true)} style={{position:"fixed",bottom:76,right:16,width:52,height:52,borderRadius:"50%",background:plan!=="free"?"#FF6B35":"#1A1A1A",border:plan!=="free"?"none":"2px solid #FF6B3544",color:plan!=="free"?"#000":"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:49,boxShadow:plan!=="free"?"0 4px 20px #FF6B3544":"none",transition:"all 0.3s",opacity:plan!=="free"?1:0.4}}>
-          {plan==="free"?"🔒":"💬"}
+      {!showChat&&plan!=="free"&&(
+        <button onClick={()=>setShowChat(true)} style={{position:"fixed",bottom:76,right:16,width:52,height:52,borderRadius:"50%",background:"#FF6B35",border:"none",color:"#000",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:49,boxShadow:"0 4px 20px #FF6B3544",transition:"all 0.3s"}}>
+          💬
         </button>
       )}
 
