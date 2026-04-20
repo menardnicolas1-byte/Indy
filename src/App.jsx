@@ -1182,7 +1182,7 @@ function Hdr({sub,accent="#FF6B35",right,onBack}){
   return(
     <div style={{padding:"16px 20px 13px",borderBottom:"1px solid #0F0F0F",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
       <div style={{display:"flex",alignItems:"center",gap:12,flex:1,minWidth:0}}>
-        {onBack&&<button onClick={onBack} style={{background:"none",border:"1px solid #1E1E1E",color:"#888",fontSize:16,width:34,height:34,borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0}}>←</button>}
+        {onBack&&<button onClick={onBack} style={{background:"none",border:"none",color:"#FF6B35",fontSize:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:"4px 8px",fontFamily:"'Inter',sans-serif",fontWeight:300}}>←</button>}
         <div style={{minWidth:0,flex:1}}>
           <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,letterSpacing:4,color:accent}}>INDY</div>
           <div style={{fontSize:9,color:"#888",letterSpacing:2.5,marginTop:1}}>{sub}</div>
@@ -1384,6 +1384,7 @@ function EditPanel({project,isNew,onClose,onSave,onDelete}){
           <button className="btn-o" style={{width:"100%"}} onClick={onClose}>Annuler</button>
         </div>
       </div>
+    {showSubModal&&<SubscribeModal onClose={()=>setShowSubModal(false)} onUpgrade={goPlan} title="La generation IA des emails booking est reservee aux abonnes." features={["Emails personnalises par salle","23 salles avec contacts directs","Conseils par salle","Templates adaptes au genre"]}/>}
     </div></div>
   );
 }
@@ -1446,6 +1447,46 @@ function Coach({projects,setProjects,activeId,setActiveId,plan,goBack}){
 
 // --- PRESS KIT ----------------------------------------------------------------
 // --- GATE  -  Bridage essai gratuit ---------------------------------------------
+// --- POPUP RESERVE AUX ABONNES ----------------------------------------------
+function SubscribeModal({onClose,onUpgrade,title,features}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"#000000DD",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeIn 0.2s ease"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#0D0D0D",border:"1px solid #FF6B3533",borderRadius:14,maxWidth:380,width:"100%",padding:"28px 24px",animation:"fadeUp 0.25s ease",position:"relative"}}>
+        <button onClick={onClose} style={{position:"absolute",top:12,right:14,background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center"}}>x</button>
+        <div style={{width:56,height:56,borderRadius:"50%",background:"#FF6B3515",border:"2px solid #FF6B3533",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,margin:"0 auto 16px"}}>*</div>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:2,textAlign:"center",marginBottom:8,color:"#F0EDE8"}}>RESERVE AUX ABONNES</div>
+        <div style={{fontSize:12,color:"#888",textAlign:"center",lineHeight:1.7,marginBottom:16}}>{title||"Cette fonctionnalite necessite un abonnement"}</div>
+        {features&&<div style={{background:"#080808",border:"1px solid #1A1A1A",borderRadius:8,padding:"12px 14px",marginBottom:16}}>
+          {features.map((f,i)=>(<div key={i} style={{display:"flex",gap:8,fontSize:11,color:"#888",padding:"4px 0"}}><span style={{color:"#FF6B35",flexShrink:0}}>+</span>{f}</div>))}
+        </div>}
+        <button className="btn" style={{marginBottom:10}} onClick={onUpgrade}>S'abonner des 9,90 EUR/mois</button>
+        <button className="btn-o" style={{width:"100%"}} onClick={onClose}>Retour</button>
+        <div style={{fontSize:9,color:"#555",textAlign:"center",marginTop:10,letterSpacing:1}}>3 jours d'essai - Sans engagement</div>
+      </div>
+    </div>
+  );
+}
+
+function GatePopup({onClose,onUpgrade,label,features}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"#000000DD",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeIn 0.2s ease"}} onClick={onClose}>
+      <div style={{background:"#0D0D0D",border:"1px solid #FF6B3533",borderRadius:14,padding:"28px 24px",maxWidth:340,width:"100%",position:"relative",boxShadow:"0 10px 40px #FF6B3530"}} onClick={e=>e.stopPropagation()}>
+        <button onClick={onClose} style={{position:"absolute",top:12,right:12,background:"none",border:"none",color:"#888",fontSize:20,cursor:"pointer",width:28,height:28}}>×</button>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,textAlign:"center"}}>
+          <div style={{width:56,height:56,borderRadius:"50%",background:"#FF6B3515",border:"2px solid #FF6B3533",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>🔒</div>
+          <div>
+            <div style={{fontSize:17,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,marginBottom:6}}>RESERVE AUX ABONNES</div>
+            <div style={{fontSize:11,color:"#888",lineHeight:1.6}}>{label||"Cette fonctionnalite est reservee aux abonnes INDY Artiste ou Label."}</div>
+          </div>
+          {features&&<div style={{background:"#080808",border:"1px solid #1A1A1A",borderRadius:8,padding:"10px 12px",width:"100%",textAlign:"left"}}>{features.map((f,i)=><div key={i} style={{display:"flex",gap:6,fontSize:10,color:"#999",padding:"3px 0"}}><span style={{color:"#FF6B35",flexShrink:0}}>✓</span>{f}</div>)}</div>}
+          <button className="btn" onClick={onUpgrade} style={{marginTop:4}}>S'abonner des 9,90€/mois</button>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#666",fontSize:10,letterSpacing:1,cursor:"pointer",fontFamily:"'Inter',sans-serif"}}>FERMER</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Gate({onUpgrade,label,features}){
   return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"48px 28px 80px",textAlign:"center",gap:18}}>
@@ -1471,18 +1512,11 @@ function Gate({onUpgrade,label,features}){
 // --- PRESS KIT ----------------------------------------------------------------
 function PressKit({projects,plan,goPlan}){
   const FMTS=[{id:"court",l:"Bio courte",i:"⚡",d:"~100 mots"},{id:"long",l:"Bio longue",i:"📰",d:"~300 mots"},{id:"email",l:"Email booking",i:"📩",d:"Prêt à envoyer"},{id:"spotify",l:"Pitch Spotify",i:"🎧",d:"Éditorial"}];
-  const [data,setData]=useState({});const [fmt,setFmt]=useState("court");const [phase,setPhase]=useState("form");const [result,setResult]=useState("");const [copied,setCopied]=useState(false);const [left,setLeft]=useState(plan==="free"?0:99);
+  const [data,setData]=useState({});const [fmt,setFmt]=useState("court");const [phase,setPhase]=useState("form");const [result,setResult]=useState("");const [copied,setCopied]=useState(false);const [left,setLeft]=useState(plan==="free"?0:99);const [showGate,setShowGate]=useState(false);
   const sf=FMTS.find(f=>f.id===fmt);
-  if(plan==="free"){
-    return(
-      <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-        <Hdr sub="PRESS KIT GENERATOR" onBack={goBack}/>
-        <Gate onUpgrade={goPlan} label="Génère bio, email booking et pitch Spotify en quelques secondes avec l'IA."/>
-      </div>
-    );
-  }
+  const [showSubModal,setShowSubModal]=useState(false);
   const gen=async()=>{
-    if(plan==="free"){goPlan();return;}
+    if(plan==="free"){setShowGate(true);return;}
     if(left<=0){goPlan();return;}setPhase("loading");
     const d=data;const P={court:`Bio courte ~100 mots, accrocheur, réseaux. FR.\nArtiste:${d.nom}\nGenre:${d.genre}\nVille:${d.ville||"France"}\nInfluences:${d.influences||""}\nProjet:${d.titre||""}\nPoints forts:${d.acc||""}`,long:`Bio longue ~300 mots, journalistique, médias/booking. FR.\nArtiste:${d.nom}\nGenre:${d.genre}\nInfluences:${d.influences||""}\nProjet:${d.titre||""}\nPoints forts:${d.acc||""}`,email:`Email booking 150-200 mots, direct, pro. FR.\nArtiste:${d.nom}\nGenre:${d.genre}\nPoints forts:${d.acc||""}\nContact:${d.contact||""}`,spotify:`Pitch Spotify éditorial ~150 mots. FR.\nArtiste:${d.nom}\nGenre:${d.genre}\nProjet:${d.titre||""}\nPoints forts:${d.acc||""}`};
     try{const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1000,system:AI_SYSTEM,messages:[{role:"user",content:P[fmt]}]})});const json=await res.json();setResult(json.content?.map(b=>b.text||"").join("")||"Erreur.");setLeft(l=>l-1);}catch{setResult("Erreur de connexion.");}setPhase("result");
@@ -1515,6 +1549,8 @@ function PressKit({projects,plan,goPlan}){
           </div>
         </div>
       )}
+    {showSubModal&&<SubscribeModal onClose={()=>setShowSubModal(false)} onUpgrade={goPlan} title="La generation IA des press kits est reservee aux abonnes." features={["Bio courte et longue illimitees","Email booking IA personnalise","Pitch Spotify editorial","Copier-coller instantane"]}/>}
+    {showGate&&<GatePopup onClose={()=>setShowGate(false)} onUpgrade={()=>{setShowGate(false);goPlan();}} label="Generation IA reservee aux abonnes. Acces illimite aux bios, emails booking, pitch Spotify." features={["Bio courte et longue IA","Email booking personnalise","Pitch editorial Spotify","Generation illimitee"]}/>}
     </div>
   );
 }
@@ -1524,7 +1560,7 @@ function Booking({plan,goPlan}){
   const [tab,setTab]=useState("salles");const [sel,setSel]=useState(null);const [emailSalle,setEmailSalle]=useState(null);const [search,setSearch]=useState("");const [filters,setFilters]=useState({smac:false,sub:false,res:false,regions:[],genres:[]});
   const tf=(k,v)=>typeof v==="boolean"?setFilters(f=>({...f,[k]:!f[k]})):setFilters(f=>({...f,[k]:f[k].includes(v)?f[k].filter(x=>x!==v):[...f[k],v]}));
   const filtered=SALLES.filter(s=>{const q=search.toLowerCase();if(q&&!s.nom.toLowerCase().includes(q)&&!s.ville.toLowerCase().includes(q)&&!s.genres.some(g=>g.includes(q)))return false;if(filters.smac&&!s.smac)return false;if(filters.sub&&!s.subv)return false;if(filters.res&&!s.res)return false;if(filters.regions.length&&!filters.regions.includes(s.region))return false;if(filters.genres.length&&!filters.genres.some(g=>s.genres.includes(g)))return false;return true;});
-  if(plan==="free")return(
+  return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
       <Hdr sub="MODULE BOOKING" accent="#20C997" onBack={goBack}/>
       <div style={{padding:"40px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
@@ -1629,14 +1665,16 @@ function Booking({plan,goPlan}){
           </div>
         </div></div>
       )}
-      {emailSalle&&<EmailGen salle={emailSalle} onClose={()=>setEmailSalle(null)}/>}
+      {emailSalle&&<EmailGen salle={emailSalle} onClose={()=>setEmailSalle(null)} plan={plan} goPlan={goPlan}/>}
     </div>
   );
 }
 
-function EmailGen({salle,onClose}){
-  const [d,setD]=useState({nom:"",genre:"",ville:"",streams:"",projet:"",dates:""});const [contrat,setContrat]=useState(salle.contrats?.[0]||"cession");const [result,setResult]=useState("");const [phase,setPhase]=useState("form");const [copied,setCopied]=useState(false);
+function EmailGen({salle,onClose,plan,goPlan}){
+  const [d,setD]=useState({nom:"",genre:"",ville:"",streams:"",projet:"",dates:""});const [contrat,setContrat]=useState(salle.contrats?.[0]||"cession");const [result,setResult]=useState("");const [phase,setPhase]=useState("form");const [copied,setCopied]=useState(false);const [showGate,setShowGate]=useState(false);
+  const [showSubModal,setShowSubModal]=useState(false);
   const gen=async()=>{
+    if(plan==="free"){setShowGate(true);return;}
     setPhase("loading");
     const prompt=`Email booking professionnel et percutant (150-200 mots) pour démarcher ${salle.nom} à ${salle.ville}.\nArtiste:${d.nom||"l'artiste"}\nGenre:${d.genre||salle.genres[0]}\nStats:${d.streams||"artiste émergent"}\nProjet:${d.projet||"EP récent"}\nDates passées:${d.dates||"premières dates"}\nContrat:${contrat}\nContact:${salle.contact}\nJauge:${salle.jauge} · Cachet:${salle.cachet_min}-${salle.cachet_max}€\nAccroche forte, présentation courte, pourquoi cette salle, proposition concrète. Ton professionnel mais humain. En français.`;
     try{const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:800,system:AI_SYSTEM,messages:[{role:"user",content:prompt}]})});const json=await res.json();setResult(json.content?.map(b=>b.text||"").join("")||"Erreur.");}catch{setResult("Erreur de connexion.");}setPhase("result");
@@ -1662,7 +1700,7 @@ function EmailGen({salle,onClose}){
           </div>
         </div>
       )}
-    </div></div>
+    {showGate&&<GatePopup onClose={()=>setShowGate(false)} onUpgrade={()=>{setShowGate(false);goPlan();}} label="Email booking IA reserve aux abonnes." features={["Email personnalise par salle","Argumentaire sur mesure","Illimite","Optimise pour la reponse"]}/>}</div></div>
   );
 }
 
@@ -1747,17 +1785,13 @@ function Bibliotheque({plan,goPlan}){
   const [doc,setDoc]=useState(null);
   const [copied,setCopied]=useState(false);
   const [tabAnn,setTabAnn]=useState(false);
+  const [showGate,setShowGate]=useState(false);
 
   const canAccess=(d)=>plan==="label"||(plan==="artiste"&&d.access==="all");
 
   const docsForCat=(catId)=>BIBLIO_DOCS.filter(d=>d.cat===catId);
 
-  if(plan==="free")return(
-    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="BIBLIOTHEQUE" accent="#C8A96E" onBack={goBack}/>
-      <Gate onUpgrade={goPlan} label="Acces a 24 documents juridiques et pratiques rediges pour les artistes independants." features={["Contrats (featuring, split sheet)","Fiches SACEM & ISRC","Checklist sortie complete","Templates press kit & pitch Spotify","Fiches financement CNM, ADAMI","Guides statuts juridiques"]}/>
-    </div>
-  );
+  const [showSubModal,setShowSubModal]=useState(false);
 
   if(doc){return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
@@ -1800,9 +1834,9 @@ function Bibliotheque({plan,goPlan}){
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   {docs.map(d=>{
-                    const ok=canAccess(d);
+                    const ok=plan==="free"?false:canAccess(d);
                     return(
-                      <div key={d.id} className="card" style={{padding:"12px 14px",opacity:ok?1:0.5,cursor:ok?"pointer":"not-allowed",borderColor:ok?`${cat.color}18`:"#111"}} onClick={()=>ok&&setDoc(d)}>
+                      <div key={d.id} className="card" style={{padding:"12px 14px",opacity:ok?1:0.5,cursor:ok?"pointer":"not-allowed",borderColor:ok?`${cat.color}18`:"#111"}} onClick={()=>{if(plan==="free"){setShowGate(true);return;}if(ok)setDoc(d);else setShowSubModal(true);}}>
                         <div style={{display:"flex",alignItems:"center",gap:10}}>
                           <span style={{fontSize:18,flexShrink:0}}>{d.icon}</span>
                           <div style={{flex:1}}>
@@ -1842,21 +1876,16 @@ function Bibliotheque({plan,goPlan}){
           })}
         </div>
       )}
+    {showSubModal&&<SubscribeModal onClose={()=>setShowSubModal(false)} onUpgrade={goPlan} title="Les 24 documents sont reserves aux abonnes." features={["Contrats (featuring, cession, co-prod, licence)","Fiches SACEM, ISRC, droits voisins","Templates press kit, pitch Spotify","Guides statuts (auto-entrepreneur, intermittent, label)","Fiches financement CNM, ADAMI, DRAC"]}/>}
+    {showGate&&<GatePopup onClose={()=>setShowGate(false)} onUpgrade={()=>{setShowGate(false);goPlan();}} label="Bibliotheque de 24 documents juridiques reservee aux abonnes." features={["Contrats featuring, split sheet","Fiches SACEM, ISRC","Templates press kit","Guides statuts juridiques","Checklist sortie complete"]}/>}
     </div>
   );
 }
 
 // --- SUBVENTIONS --------------------------------------------------------------
 function Subventions({plan,goPlan}){
-  if(plan==="free"){
-    return(
-      <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-        <Hdr sub="FINANCEMENT & DÉMARCHES" accent="#F03E3E" onBack={goBack}/>
-        <Gate onUpgrade={goPlan} label="Matching personnalisé avec les 9+ aides françaises (CNM, SACEM, ADAMI...) + liens directs vers les formulaires officiels."/>
-      </div>
-    );
-  }
-  const [ans,setAns]=useState({});const [qi,setQi]=useState(0);const [phase,setPhase]=useState("q");const [exp,setExp]=useState(null);const [showD,setShowD]=useState(false);const [selD,setSelD]=useState(null);
+  const [showSubModal,setShowSubModal]=useState(false);
+  const [ans,setAns]=useState({});const [qi,setQi]=useState(0);const [phase,setPhase]=useState("q");const [exp,setExp]=useState(null);const [showD,setShowD]=useState(false);const [selD,setSelD]=useState(null);const [showGate,setShowGate]=useState(false);
   const answer=(qid,val)=>{const n={...ans,[qid]:val};setAns(n);if(qi<FINANCEMENT_QS.length-1)setTimeout(()=>setQi(qi+1),280);};
   const allDone=Object.keys(ans).length===FINANCEMENT_QS.length;
   const results=AIDES.map(a=>({...a,score:scoreAide(a,ans)})).filter(a=>a.score>=40).sort((a,b)=>b.score-a.score);
@@ -1903,7 +1932,7 @@ function Subventions({plan,goPlan}){
               <div style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,marginBottom:6}}>QUESTION {i+1}/{FINANCEMENT_QS.length}</div>
               <div style={{fontSize:18,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,marginBottom:18}}>{q.q.toUpperCase()}</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>{q.opts.map(opt=><button key={opt.v} onClick={()=>answer(q.id,opt.v)} style={{background:ans[q.id]===opt.v?"#150808":"#0D0D0D",border:`1px solid ${ans[q.id]===opt.v?"#F03E3E":"#1A1A1A"}`,color:ans[q.id]===opt.v?"#F03E3E":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"13px 15px",borderRadius:7,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:10}}><span style={{width:16,height:16,borderRadius:"50%",border:`1.5px solid ${ans[q.id]===opt.v?"#F03E3E":"#333"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#F03E3E",flexShrink:0}}>{ans[q.id]===opt.v?"✓":""}</span>{opt.l}</button>)}</div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>{i>0?<button className="btn-o" onClick={()=>setQi(i-1)}>← Retour</button>:<div/>}{allDone&&<button className="btn" style={{width:"auto",padding:"10px 20px",background:"#F03E3E"}} onClick={()=>setPhase("results")}>Voir mes aides →</button>}</div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>{i>0?<button className="btn-o" onClick={()=>setQi(i-1)}>← Retour</button>:<div/>}{allDone&&<button className="btn" style={{width:"auto",padding:"10px 20px",background:"#F03E3E"}} onClick={()=>plan==="free"?setShowGate(true):setPhase("results")}>Voir mes aides →</button>}</div>
             </div>
           );})}
         </div>
@@ -1915,6 +1944,7 @@ function Subventions({plan,goPlan}){
           {possible.length>0&&<><div style={{fontSize:9,letterSpacing:3,color:"#999",marginTop:16,marginBottom:10}}>◦ AIDES POSSIBLES</div>{possible.map(a=><AideCard key={a.id} aide={a} expanded={exp===a.id} onToggle={()=>setExp(exp===a.id?null:a.id)}/>)}</>}
         </div>
       )}
+    {showSubModal&&<SubscribeModal onClose={()=>setShowSubModal(false)} onUpgrade={goPlan} title="Le matching des aides est reserve aux abonnes." features={["9+ aides françaises analysees","Score de compatibilite par aide","Etapes detaillees par dossier","Liens directs vers les formulaires"]}/>}
     </div>
   );
 }
@@ -1934,6 +1964,7 @@ function AideCard({aide,expanded,onToggle}){
           <a href={aide.lien} target="_blank" rel="noopener noreferrer" className="lnk" style={{marginTop:12,background:"none",border:`1.5px solid ${aide.color}`,color:aide.color}}>Accéder au dossier →</a>
         </div>
       )}
+    {showGate&&<GatePopup onClose={()=>setShowGate(false)} onUpgrade={()=>{setShowGate(false);goPlan();}} label="Matching aides financieres reserve aux abonnes." features={["9+ aides francaises","Matching personnalise","Liens directs formulaires","CNM, SACEM, ADAMI, DRAC"]}/>}
     </div>
   );
 }
@@ -1986,15 +2017,10 @@ function Reseau({user,plan,goPlan,goBack}){
 
 // --- ACTUALITÉS ---------------------------------------------------------------
 function Actualites({plan,goPlan}){
-  const [loading,setLoading]=useState(false);const [articles,setArticles]=useState(null);const [query,setQuery]=useState("");const [searched,setSearched]=useState(false);
-  if(plan==="free")return(
-    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="ACTUALITES" accent="#74C0FC" onBack={goBack}/>
-      <Gate onUpgrade={goPlan} label="Acces aux actualites musicales en temps reel  -  concours, festivals, appels a projets, jams." features={["Concours et appels a projets","Festivals independants","Jams sessions","Actualites subventions","Recherche personnalisee"]}/>
-    </div>
-  );
+  const [loading,setLoading]=useState(false);const [articles,setArticles]=useState(null);const [query,setQuery]=useState("");const [searched,setSearched]=useState(false);const [showGate,setShowGate]=useState(false);
+
   const CATS=[{l:"Concours de chant",q:"concours chant France 2025"},{l:"Jams sessions",q:"jam session Paris Lyon Marseille 2025"},{l:"Festivals",q:"festival musique indépendant France 2025"},{l:"Appels à projets",q:"appel à projets musique culture 2025"},{l:"Actualité indé",q:"artiste indépendant musique France actualité"},{l:"Subventions",q:"subvention musique artiste 2025 CNM"}];
-  const search=async(q)=>{
+  const search=async(q)=>{if(plan==="free"){setShowGate(true);return;}
     setLoading(true);setSearched(true);setQuery(q);
     try{
       const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,tools:[{type:"web_search_20250305",name:"web_search"}],messages:[{role:"user",content:`Cherche les dernières actualités sur : "${q}" pour artistes musicaux indépendants en France. Retourne exactement 5 résultats en JSON valide, sans markdown ni backticks, format: [{"titre":"...","source":"...","date":"...","url":"...","resume":"...","categorie":"..."}]`}]})});
@@ -2029,6 +2055,7 @@ function Actualites({plan,goPlan}){
           ))}
         </div>
       )}
+    {showGate&&<GatePopup onClose={()=>setShowGate(false)} onUpgrade={()=>{setShowGate(false);goPlan();}} label="Actualites musicales reservees aux abonnes." features={["Concours et appels a projets","Festivals independants","Jams sessions","Actualites subventions"]}/>}
     </div>
   );
 }
@@ -2137,7 +2164,7 @@ export default function INDYComplete() {
     {id:"coach",     l:"Coach",    i:"🎯"},
     {id:"presskit",  l:"Press Kit",i:"✍️"},
     {id:"booking",   l:"Booking",  i:"🎤"},
-    {id:"more",      l:"Plus",     i:"✦"},
+    {id:"more",      l:"Plus",     i:"+"},
   ];
 
   const [showMore,setShowMore]=useState(false);
@@ -2146,7 +2173,7 @@ export default function INDYComplete() {
     {id:"subventions", l:"Financement",i:"💰",c:"#F03E3E"},
     {id:"bibliotheque",l:"Biblio",    i:"📚",c:"#C8A96E"},
     {id:"annuaire",    l:"Annuaire",  i:"🗂️",c:"#FFD43B"},
-    {id:"reseau",      l:"Réseau",    i:"🤝",c:"#00C9A7"},
+    {id:"actualites",  l:"Actus",     i:"📰",c:"#74C0FC"},
     {id:"profil",      l:"Compte",    i:"👤",c:"#FF6B35"},
   ];
 
@@ -2200,7 +2227,7 @@ export default function INDYComplete() {
           const isMore=n.id==="more";const act=isMore?showMore:view===n.id;
           return(
             <button key={n.id} className="nav" onClick={()=>{if(isMore){setShowMore(!showMore);}else{setView(n.id);setShowMore(false);}}}>
-              <span style={{fontSize:18,filter:act?"none":"grayscale(0.8)",opacity:act?1:0.35,transition:"all 0.2s"}}>{n.i}</span>
+              <span style={{fontSize:n.id==="more"?22:18,filter:act||n.id==="more"?"none":"grayscale(0.8)",opacity:act||n.id==="more"?1:0.35,color:n.id==="more"?"#FF6B35":"inherit",fontWeight:n.id==="more"?600:400,transition:"all 0.2s"}}>{n.i}</span>
               <span style={{fontSize:10,letterSpacing:0.5,color:act?"#FF6B35":"#666",transition:"color 0.2s",fontWeight:act?700:500}}>{n.l}</span>
               {act&&<div style={{width:14,height:2,borderRadius:1,background:"#FF6B35",marginTop:1}}/>}
             </button>
