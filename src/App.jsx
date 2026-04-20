@@ -579,7 +579,7 @@ function PressKit({projects,plan,goPlan}){
   const gen=async()=>{
     if(left<=0){goPlan();return;}setPhase("loading");
     const d=data;const P={court:`Bio courte ~100 mots, accrocheur, réseaux. FR.\nArtiste:${d.nom}\nGenre:${d.genre}\nVille:${d.ville||"France"}\nInfluences:${d.influences||""}\nProjet:${d.titre||""}\nPoints forts:${d.acc||""}`,long:`Bio longue ~300 mots, journalistique, médias/booking. FR.\nArtiste:${d.nom}\nGenre:${d.genre}\nInfluences:${d.influences||""}\nProjet:${d.titre||""}\nPoints forts:${d.acc||""}`,email:`Email booking 150-200 mots, direct, pro. FR.\nArtiste:${d.nom}\nGenre:${d.genre}\nPoints forts:${d.acc||""}\nContact:${d.contact||""}`,spotify:`Pitch Spotify éditorial ~150 mots. FR.\nArtiste:${d.nom}\nGenre:${d.genre}\nProjet:${d.titre||""}\nPoints forts:${d.acc||""}`};
-    try{const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:AI_SYSTEM,messages:[{role:"user",content:P[fmt]}]})});const json=await res.json();setResult(json.content?.map(b=>b.text||"").join("")||"Erreur.");setLeft(l=>l-1);}catch{setResult("Erreur de connexion.");}setPhase("result");
+    try{const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1000,system:AI_SYSTEM,messages:[{role:"user",content:P[fmt]}]})});const json=await res.json();setResult(json.content?.map(b=>b.text||"").join("")||"Erreur.");setLeft(l=>l-1);}catch{setResult("Erreur de connexion.");}setPhase("result");
   };
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
@@ -733,7 +733,7 @@ function EmailGen({salle,onClose}){
   const gen=async()=>{
     setPhase("loading");
     const prompt=`Email booking professionnel et percutant (150-200 mots) pour démarcher ${salle.nom} à ${salle.ville}.\nArtiste:${d.nom||"l'artiste"}\nGenre:${d.genre||salle.genres[0]}\nStats:${d.streams||"artiste émergent"}\nProjet:${d.projet||"EP récent"}\nDates passées:${d.dates||"premières dates"}\nContrat:${contrat}\nContact:${salle.contact}\nJauge:${salle.jauge} · Cachet:${salle.cachet_min}–${salle.cachet_max}€\nAccroche forte, présentation courte, pourquoi cette salle, proposition concrète. Ton professionnel mais humain. En français.`;
-    try{const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,system:AI_SYSTEM,messages:[{role:"user",content:prompt}]})});const json=await res.json();setResult(json.content?.map(b=>b.text||"").join("")||"Erreur.");}catch{setResult("Erreur de connexion.");}setPhase("result");
+    try{const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:800,system:AI_SYSTEM,messages:[{role:"user",content:prompt}]})});const json=await res.json();setResult(json.content?.map(b=>b.text||"").join("")||"Erreur.");}catch{setResult("Erreur de connexion.");}setPhase("result");
   };
   return(
     <div className="panel"><div className="pin" style={{borderTopColor:salle.color}}>
@@ -836,12 +836,6 @@ function Annuaire(){
 
 // --- SUBVENTIONS --------------------------------------------------------------
 function Subventions({plan,goPlan}){
-  const [ans,setAns]=useState({});
-  const [qi,setQi]=useState(0);
-  const [phase,setPhase]=useState("q");
-  const [exp,setExp]=useState(null);
-  const [showD,setShowD]=useState(false);
-  const [selD,setSelD]=useState(null);
   if(plan==="free"){
     return(
       <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
@@ -850,6 +844,7 @@ function Subventions({plan,goPlan}){
       </div>
     );
   }
+  const [ans,setAns]=useState({});const [qi,setQi]=useState(0);const [phase,setPhase]=useState("q");const [exp,setExp]=useState(null);const [showD,setShowD]=useState(false);const [selD,setSelD]=useState(null);
   const answer=(qid,val)=>{const n={...ans,[qid]:val};setAns(n);if(qi<FINANCEMENT_QS.length-1)setTimeout(()=>setQi(qi+1),280);};
   const allDone=Object.keys(ans).length===FINANCEMENT_QS.length;
   const results=AIDES.map(a=>({...a,score:scoreAide(a,ans)})).filter(a=>a.score>=40).sort((a,b)=>b.score-a.score);
@@ -984,7 +979,7 @@ function Actualites(){
   const search=async(q)=>{
     setLoading(true);setSearched(true);setQuery(q);
     try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1200,tools:[{type:"web_search_20250305",name:"web_search"}],messages:[{role:"user",content:`Cherche les dernières actualités sur : "${q}" pour artistes musicaux indépendants en France. Retourne exactement 5 résultats en JSON valide, sans markdown ni backticks, format: [{"titre":"...","source":"...","date":"...","url":"...","resume":"...","categorie":"..."}]`}]})});
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1200,messages:[{role:"user",content:`Cherche les dernières actualités sur : "${q}" pour artistes musicaux indépendants en France. Retourne exactement 5 résultats en JSON valide, sans markdown ni backticks, format: [{"titre":"...","source":"...","date":"...","url":"...","resume":"...","categorie":"..."}]`}]})});
       const json=await res.json();const text=json.content?.filter(b=>b.type==="text").map(b=>b.text).join("")||"[]";const clean=text.replace(/```json|```/g,"").trim();
       try{setArticles(JSON.parse(clean));}catch{setArticles([]);}
     }catch{setArticles([]);}
@@ -1049,7 +1044,7 @@ function Chatbot({plan,onUpgrade,onClose}){
     const userMsg={role:"user",content:input.trim()};
     setMsgs(prev=>[...prev,userMsg]);setInput("");setLoading(true);
     try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,system:COACH_SYS,messages:[...msgs,userMsg].map(m=>({role:m.role,content:m.content}))})});
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:800,system:COACH_SYS,messages:[...msgs,userMsg].map(m=>({role:m.role,content:m.content}))})});
       const json=await res.json();
       setMsgs(prev=>[...prev,{role:"assistant",content:json.content?.map(b=>b.text||"").join("")||"Erreur."}]);
     }catch{setMsgs(prev=>[...prev,{role:"assistant",content:"Erreur de connexion. Réessaie."}]);}
