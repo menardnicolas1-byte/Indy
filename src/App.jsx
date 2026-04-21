@@ -1,5 +1,30 @@
 import React, { useState, useEffect, useRef } from "react";
 
+// ─── SUPABASE CLIENT (lazy loaded, compatible preview + prod) ─────────────────
+// En prod (Vercel/Vite) : variables d'env du build → exposées sur window.__INDY_ENV__
+// En preview Claude : pas de Supabase → mode démo silencieux
+const getEnv = (key) => {
+  if (typeof window !== "undefined" && window.__INDY_ENV__?.[key]) return window.__INDY_ENV__[key];
+  if (typeof globalThis !== "undefined" && globalThis[key]) return globalThis[key];
+  return "";
+};
+const SUPABASE_URL = getEnv("VITE_SUPABASE_URL");
+const SUPABASE_ANON_KEY = getEnv("VITE_SUPABASE_ANON_KEY");
+
+let supabase = null;
+const initSupabase = async () => {
+  if (supabase) return supabase;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  try {
+    const mod = await import(/* @vite-ignore */ "https://esm.sh/@supabase/supabase-js@2");
+    supabase = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    return supabase;
+  } catch (e) {
+    console.warn("Supabase non chargé (mode démo)", e);
+    return null;
+  }
+};
+
 // ─── STRIPE PRICE IDs (fondateur) ────────────────────────────────────────────
 const STRIPE = {
   artiste: "https://buy.stripe.com/9B65kvajx2pAeS0a0C2Ji00",
@@ -293,6 +318,72 @@ function GateToast({onUpgrade}){
 }
 
 
+// ─── AUTH — Login / Signup ────────────────────────────────────────────────────
+function Auth({onSuccess, onBack}){
+  const [mode,setMode]=useState("signin"); // "signin" | "signup"
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const [name,setName]=useState("");
+  const [err,setErr]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  const handle=async()=>{
+    setErr("");
+    if(!email||!password){setErr("Email et mot de passe requis");return;}
+    if(mode==="signup"&&!name){setErr("Ton nom d'artiste est requis");return;}
+    if(password.length<6){setErr("Mot de passe : 6 caractères min.");return;}
+    setLoading(true);
+    try{
+      const sb = await initSupabase();
+      if(!sb){
+        // Fallback démo sans Supabase configuré
+        setTimeout(()=>{onSuccess({id:"demo-"+Date.now(),email,name:name||email.split("@")[0]});setLoading(false);},600);
+        return;
+      }
+      if(mode==="signup"){
+        const {data,error}=await sb.auth.signUp({email,password,options:{data:{name}}});
+        if(error){setErr(error.message);setLoading(false);return;}
+        if(data.user){
+          await sb.from("profiles").upsert({id:data.user.id,email:data.user.email,name,plan:"free"});
+          onSuccess({id:data.user.id,email:data.user.email,name});
+        }
+      } else {
+        const {data,error}=await sb.auth.signInWithPassword({email,password});
+        if(error){setErr("Identifiants incorrects");setLoading(false);return;}
+        const {data:profile}=await sb.from("profiles").select("*").eq("id",data.user.id).single();
+        onSuccess({id:data.user.id,email:data.user.email,name:profile?.name||email.split("@")[0],plan:profile?.plan||"free"});
+      }
+    }catch(e){setErr("Erreur de connexion : "+e.message);}
+    setLoading(false);
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"16px 20px",display:"flex",alignItems:"center",gap:12}}>
+        {onBack&&<button onClick={onBack} style={{background:"none",border:"none",color:"#FF6B35",fontSize:22,cursor:"pointer"}}>←</button>}
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,letterSpacing:4,color:"#FF6B35"}}>INDY</div>
+      </div>
+      <div style={{flex:1,display:"flex",flexDirection:"column",padding:"20px 28px",gap:18}}>
+        <div style={{textAlign:"center",marginBottom:8}}>
+          <Logo size={60} anim/>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:3,marginTop:14}}>{mode==="signin"?"CONNEXION":"CRÉER UN COMPTE"}</div>
+          <div style={{fontSize:11,color:"#666",marginTop:6}}>{mode==="signin"?"Retrouve ton parcours artiste":"Rejoins les 200 membres fondateurs"}</div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {mode==="signup"&&<div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,display:"block",marginBottom:7}}>NOM D'ARTISTE</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Ton nom d'artiste…"/></div>}
+          <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,display:"block",marginBottom:7}}>EMAIL</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="toi@email.com"/></div>
+          <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,display:"block",marginBottom:7}}>MOT DE PASSE</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Min. 6 caractères" onKeyDown={e=>e.key==="Enter"&&handle()}/></div>
+          {err&&<div style={{fontSize:11,color:"#F03E3E",background:"#F03E3E12",border:"1px solid #F03E3E33",borderRadius:6,padding:"8px 12px"}}>{err}</div>}
+          <button className="btn" disabled={loading} onClick={handle}>{loading?"Connexion…":mode==="signin"?"Se connecter →":"Créer mon compte →"}</button>
+          <button className="btn-o" style={{width:"100%"}} onClick={()=>{setMode(mode==="signin"?"signup":"signin");setErr("");}}>{mode==="signin"?"Pas encore de compte ? S'inscrire":"Déjà un compte ? Se connecter"}</button>
+        </div>
+        {!supabase&&<div style={{fontSize:10,color:"#555",textAlign:"center",marginTop:8,lineHeight:1.5}}>Mode démo · Supabase non configuré<br/>(en prod : session persistante + reconnexion)</div>}
+      </div>
+    </div>
+  );
+}
+
+
 // ─── PAYWALL — unique composant d'accès ──────────────────────────────────────
 function Paywall({onSelect, current}){
   const [confirming,setConfirming]=useState(null); // plan en attente de confirmation paiement
@@ -519,57 +610,302 @@ function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user}){
 }
 
 // ─── COACH ───────────────────────────────────────────────────────────────────
-function Coach({projects,setProjects,activeId,setActiveId}){
-  const [si,setSi]=useState(0);const [tip,setTip]=useState(null);
+// ─── GUIDE COACH (théorie + bonnes pratiques par étape) ──────────────────────
+const STAGE_GUIDE = {
+  creation: {
+    intro: "L'étape de création conditionne tout le reste. Un titre mal mixé ne sera jamais sauvé par la promo.",
+    pillars: [
+      {t:"Composition", d:"Mélodie, structure, accroche. Les 15 premières secondes décident."},
+      {t:"Production", d:"Arrangement, sons, énergie. Crée la signature."},
+      {t:"Mix & Master", d:"Niveaux, EQ, compression, -14 LUFS pour streaming."},
+    ],
+    warning:"Ne saute jamais le mix pro. Un titre mal mixé tue toute campagne marketing.",
+  },
+  protection: {
+    intro: "Tes droits avant la sortie. SACEM, ISRC, contrats featuring : non négociables.",
+    pillars: [
+      {t:"SACEM", d:"Dépose AVANT la distribution. Sinon tu perds 6 mois de droits."},
+      {t:"Splits", d:"Répartition écrite des droits entre auteurs/compositeurs/featuring."},
+      {t:"Samples", d:"Tout sample non cleared peut faire retirer ton titre du jour au lendemain."},
+    ],
+    warning:"Un sample non cleared = retrait Spotify + procès possible. Toujours vérifier.",
+  },
+  distribution: {
+    intro: "DistroKid (rapide), TuneCore (contrôle), CD Baby (royalties). Choisis selon ta stratégie.",
+    pillars: [
+      {t:"Distributeur", d:"DistroKid 22€/an illimité. Idéal si tu sors souvent."},
+      {t:"Metadata", d:"Genre, sous-genre, mood. Détermine la découvrabilité."},
+      {t:"Pitch Spotify", d:"7 semaines minimum avant la date. Une seule chance par sortie."},
+    ],
+    warning:"Ne sors jamais sans avoir pitché Spotify Editorial 7 semaines à l'avance.",
+  },
+  promotion: {
+    intro: "Une bonne promo c'est avant tout un bon EPK et une présence régulière. Pas un blast.",
+    pillars: [
+      {t:"EPK / Press Kit", d:"Bio courte + longue, photo HD, vidéo live, lien Spotify."},
+      {t:"Contenu vertical", d:"3-5 vidéos TikTok/Reels prêtes le jour J."},
+      {t:"Smart link", d:"Un seul lien dans toutes tes bio (Linkfire, Bandcamp link)."},
+    ],
+    warning:"La régularité bat le coup d'éclat. 1 post quotidien > 10 posts en rafale.",
+  },
+  financement: {
+    intro: "Le financement public musical en France est sous-utilisé. Vise CNM + SACEM en priorité.",
+    pillars: [
+      {t:"CNM", d:"Production phonographique, clip, tournée. Jusqu'à 50K€."},
+      {t:"SACEM", d:"Bourse à la création 1.5K-10K€ pour membres."},
+      {t:"DRAC + ADAMI", d:"Aides régionales et droits d'artiste-interprète."},
+    ],
+    warning:"Les dossiers prennent 2-6 mois. Dépose AVANT que tu en aies besoin.",
+  },
+  live: {
+    intro: "La scène est ton meilleur outil de carrière long terme. Vise les SMAC.",
+    pillars: [
+      {t:"EPK live", d:"Bio + vidéo live + rider technique. Sans, aucune programmation."},
+      {t:"Cible", d:"Jauge 100-300 personnes pour démarrer. SMAC en priorité."},
+      {t:"Email parfait", d:"Court, EPK en premier lien, propose une vraie soirée."},
+    ],
+    warning:"Ne signe jamais un cachet à l'oral. Toujours par email/contrat avant la date.",
+  },
+};
+
+// ─── COACH ENRICHI ───────────────────────────────────────────────────────────
+function Coach({projects,setProjects,activeId,setActiveId,plan,onGoPlan}){
+  const [si,setSi]=useState(null); // null = vue arborescence ; 0-5 = étape sélectionnée
+  const [tip,setTip]=useState(null);
+  const [showGuide,setShowGuide]=useState(false);
+  const [boostMsg,setBoostMsg]=useState(null);
+  const [boostLoad,setBoostLoad]=useState(false);
+  const [showBoostToast,setShowBoostToast]=useState(false);
+
   const proj=projects.find(p=>p.id===activeId)||projects[0];
-  if(!proj)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",color:"#999",fontFamily:"'Inter',sans-serif",flexDirection:"column",gap:16,background:"#080808"}}><div style={{fontSize:32}}>🎵</div><div style={{fontSize:12}}>Ajoute un titre depuis le Dashboard.</div></div>;
-  const stage=STAGES[si];const tasks=TASKS[stage.id]||[];const checks=proj.checks||{};
-  const done=tasks.filter(t=>checks[t.id]).length;const pct=tasks.length?done/tasks.length:0;
-  const toggle=(tid)=>{const nc={...checks,[tid]:!checks[tid]};const np={};STAGES.forEach(s=>{const ts=TASKS[s.id]||[];np[s.id]=ts.length?Math.round(ts.filter(t=>nc[t.id]).length/ts.length*100):0;});setProjects(ps=>ps.map(p=>p.id===proj.id?{...p,checks:nc,progress:np}:p));};
+
+  if(!proj)return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
+      <Hdr sub="COACH PARCOURS"/>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh",color:"#999",flexDirection:"column",gap:16,padding:"20px"}}>
+        <div style={{fontSize:42}}>🎯</div>
+        <div style={{fontSize:14,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:3}}>AUCUN TITRE EN COURS</div>
+        <div style={{fontSize:12,color:"#666",textAlign:"center",lineHeight:1.6,maxWidth:260}}>Ajoute un titre depuis le Dashboard pour démarrer ton parcours coach.</div>
+      </div>
+    </div>
+  );
+
+  const stage=si!==null?STAGES[si]:null;
+  const tasks=stage?(TASKS[stage.id]||[]):[];
+  const checks=proj.checks||{};
+  const done=stage?tasks.filter(t=>checks[t.id]).length:0;
+  const pct=tasks.length?done/tasks.length:0;
+
+  // Calcul global pour rappels automatiques
+  const globalProgress=STAGES.map(s=>{const ts=TASKS[s.id]||[];const d=ts.filter(t=>checks[t.id]).length;return{...s,done:d,total:ts.length,pct:ts.length?d/ts.length:0};});
+  const totalDone=globalProgress.reduce((a,s)=>a+s.done,0);
+  const totalTasks=globalProgress.reduce((a,s)=>a+s.total,0);
+  const globalPct=totalTasks?Math.round(totalDone/totalTasks*100):0;
+  const nextStage=globalProgress.find(s=>s.pct<1)||globalProgress[0];
+  const blockedStage=globalProgress.find(s=>s.pct>0&&s.pct<0.4);
+
+  const toggle=(tid)=>{
+    const nc={...checks,[tid]:!checks[tid]};
+    const np={};
+    STAGES.forEach(s=>{const ts=TASKS[s.id]||[];np[s.id]=ts.length?Math.round(ts.filter(t=>nc[t.id]).length/ts.length*100):0;});
+    setProjects(ps=>ps.map(p=>p.id===proj.id?{...p,checks:nc,progress:np}:p));
+  };
+
+  // Bouton Coup de Boost — appel IA pour conseils personnalisés selon avancement
+  const handleBoost=async()=>{
+    if(plan==="free"){setShowBoostToast(true);setTimeout(()=>setShowBoostToast(false),3500);return;}
+    setBoostLoad(true);setBoostMsg(null);
+    const stageReport=globalProgress.map(s=>`${s.label}:${s.done}/${s.total}`).join(" · ");
+    const prompt=`Artiste : ${proj.artiste} (${proj.genre}). Titre : "${proj.titre}".\nAvancement : ${stageReport}.\nProchaine action : ${proj.urgent||"non définie"}.\nDonne 3 conseils CONCRETS et personnalisés (1 par paragraphe court) pour relancer ce projet maintenant. Évite les généralités, sois précis et actionable. Maximum 200 mots au total.`;
+    try{
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:COACH_SYS,messages:[{role:"user",content:prompt}],maxTokens:600})});
+      const json=await res.json();
+      setBoostMsg(json.content?.map(b=>b.text||"").join("")||"Erreur de génération.");
+    }catch{setBoostMsg("Erreur de connexion. Réessaie dans un instant.");}
+    setBoostLoad(false);
+  };
+
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="COACH PARCOURS" right={<select value={proj.id} onChange={e=>setActiveId(Number(e.target.value))} style={{background:"#111",border:"1px solid #1A1A1A",color:"#888",fontSize:11,padding:"6px 10px",borderRadius:6,width:"auto"}}>{projects.map(p=><option key={p.id} value={p.id}>{p.titre}</option>)}</select>}/>
+      <Hdr sub="COACH PARCOURS" onBack={si!==null?()=>{setSi(null);setTip(null);setShowGuide(false);}:undefined} right={projects.length>1&&<select value={proj.id} onChange={e=>setActiveId(Number(e.target.value))} style={{background:"#111",border:"1px solid #1A1A1A",color:"#888",fontSize:11,padding:"6px 10px",borderRadius:6,width:"auto"}}>{projects.map(p=><option key={p.id} value={p.id}>{p.titre}</option>)}</select>}/>
+
+      {/* Bandeau projet actif */}
       <div style={{padding:"10px 18px",borderBottom:"1px solid #111",display:"flex",alignItems:"center",gap:8}}>
-        <div style={{width:8,height:8,borderRadius:"50%",background:proj.color}}/><span style={{fontSize:11,color:"#888"}}>{proj.titre}</span><span style={{fontSize:10,color:"#888"}}>· {proj.artiste}</span>
-        {proj.urgent&&<span className="pill" style={{background:`${proj.color}15`,color:proj.color,marginLeft:"auto"}}>⚡ {proj.urgent}</span>}
+        <div style={{width:8,height:8,borderRadius:"50%",background:proj.color}}/>
+        <span style={{fontSize:11,color:"#CCC"}}>{proj.titre}</span>
+        <span style={{fontSize:10,color:"#888"}}>· {proj.artiste}</span>
+        <span style={{marginLeft:"auto",fontSize:11,color:proj.color,fontFamily:"'Bebas Neue',sans-serif"}}>{globalPct}%</span>
       </div>
-      <div style={{display:"flex",overflowX:"auto",padding:"10px 14px",gap:6,borderBottom:"1px solid #0F0F0F",scrollbarWidth:"none"}}>
-        {STAGES.map((s,i)=>{const ts=TASKS[s.id]||[];const act=i===si;return(
-          <button key={s.id} onClick={()=>{setSi(i);setTip(null);}} style={{background:act?`${s.color}15`:"none",border:`1px solid ${act?s.color:"#1A1A1A"}`,color:act?s.color:"#999",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"7px 12px",borderRadius:20,cursor:"pointer",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-            <span style={{fontSize:14}}>{s.icon}</span><span>{s.label.toUpperCase()}</span>
-            <div style={{display:"flex",gap:2}}>{ts.map((t,ti)=><div key={ti} style={{width:4,height:4,borderRadius:"50%",background:checks[t.id]?s.color:"#222"}}/>)}</div>
+
+      {/* ── VUE 1 : ARBORESCENCE (par défaut) ──────────────────────────── */}
+      {si===null&&(
+        <div style={{padding:"16px 18px"}}>
+          {/* Bloc rappel automatique */}
+          {globalPct===0&&(
+            <div style={{background:"#0D0D0D",border:"1px solid #FF6B3522",borderRadius:10,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:9,color:"#FF6B35",letterSpacing:2,marginBottom:6}}>◆ COACH · BIENVENUE</div>
+              <div style={{fontSize:12,color:"#888",lineHeight:1.7}}>Ton parcours commence ici. Tape sur une étape pour découvrir le guide et cocher tes avancées.</div>
+            </div>
+          )}
+          {globalPct>0&&globalPct<100&&blockedStage&&(
+            <div style={{background:"#0D0D0D",border:`1px solid ${blockedStage.color}33`,borderRadius:10,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:9,color:blockedStage.color,letterSpacing:2,marginBottom:6}}>⚡ RAPPEL AUTO</div>
+              <div style={{fontSize:12,color:"#888",lineHeight:1.7}}>L'étape <strong style={{color:blockedStage.color}}>{blockedStage.label}</strong> est en cours mais avance lentement ({blockedStage.done}/{blockedStage.total}). Termine-la avant de passer à la suivante.</div>
+            </div>
+          )}
+          {globalPct>0&&globalPct<100&&!blockedStage&&nextStage&&(
+            <div style={{background:"#0D0D0D",border:`1px solid ${nextStage.color}33`,borderRadius:10,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:9,color:nextStage.color,letterSpacing:2,marginBottom:6}}>→ PROCHAINE ÉTAPE</div>
+              <div style={{fontSize:12,color:"#888",lineHeight:1.7}}>Continue avec <strong style={{color:nextStage.color}}>{nextStage.label}</strong> ({nextStage.done}/{nextStage.total} validés).</div>
+            </div>
+          )}
+          {globalPct===100&&(
+            <div style={{background:"#0D0D0D",border:"1px solid #00C9A744",borderRadius:10,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:9,color:"#00C9A7",letterSpacing:2,marginBottom:6}}>🏆 PARCOURS TERMINÉ</div>
+              <div style={{fontSize:12,color:"#888",lineHeight:1.7}}>Toutes les étapes sont validées. Ton titre est prêt pour la sortie. Bravo.</div>
+            </div>
+          )}
+
+          {/* Bouton manuel : Coup de boost IA */}
+          <button onClick={handleBoost} disabled={boostLoad} style={{width:"100%",background:plan==="free"?"#1A1A1A":"linear-gradient(135deg,#FF6B35,#FF8550)",border:plan==="free"?"1px solid #FF6B3533":"none",color:plan==="free"?"#FF6B35":"#000",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:2,textTransform:"uppercase",padding:"13px 20px",borderRadius:10,cursor:"pointer",fontWeight:600,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            {boostLoad?<>⏳ Génération…</>:plan==="free"?<>🔒 ✦ Coup de boost Coach</>:<>✦ Coup de boost Coach</>}
           </button>
-        );})}
-      </div>
-      <div style={{padding:"18px 18px 0"}}>
-        <div style={{marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:4}}><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:38,color:stage.color,opacity:0.2}}>0{si+1}</span><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:3}}>{stage.label.toUpperCase()}</span></div>
-          <div style={{height:2,background:"#111",borderRadius:1,overflow:"hidden"}}><div style={{height:"100%",width:`${pct*100}%`,background:stage.color,transition:"width 0.4s ease"}}/></div>
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}><span style={{fontSize:10,color:"#888"}}>Progression</span><span style={{fontSize:10,color:stage.color}}>{done}/{tasks.length}</span></div>
-        </div>
-        <div style={{background:"#0C0C0C",border:`1px solid ${stage.color}15`,borderRadius:7,padding:"11px 14px",marginBottom:18}}>
-          <div style={{fontSize:9,color:stage.color,letterSpacing:2,marginBottom:5}}>◆ COACH</div>
-          <div style={{fontSize:12,color:"#666",lineHeight:1.7}}>
-            {pct===0&&"Coche les éléments déjà validés pour évaluer où tu en es."}{pct>0&&pct<0.5&&"Bon début — chaque point coché réduit les risques."}{pct>=0.5&&pct<1&&"Presque prêt. Quelques points restants."}{pct===1&&<span style={{color:stage.color}}>✓ Étape complète. Passe à la suivante.</span>}
+          {boostMsg&&(
+            <div style={{background:"#0D0D0D",border:"1px solid #FF6B3533",borderRadius:10,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:9,color:"#FF6B35",letterSpacing:2,marginBottom:8}}>💡 CONSEIL PERSONNALISÉ</div>
+              <div style={{fontSize:12,color:"#CCC",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{boostMsg}</div>
+              <button onClick={()=>setBoostMsg(null)} style={{background:"none",border:"none",color:"#666",fontSize:10,letterSpacing:1,padding:"8px 0 0",cursor:"pointer"}}>Fermer</button>
+            </div>
+          )}
+
+          {/* Arborescence des 6 étapes */}
+          <div style={{fontSize:10,color:"#666",letterSpacing:2,marginBottom:10}}>◆ TON PARCOURS · 6 ÉTAPES</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {globalProgress.map((s,i)=>{
+              const isComplete=s.pct===1;
+              const isInProgress=s.pct>0&&s.pct<1;
+              return(
+                <div key={s.id} className="card fu" style={{padding:0,overflow:"hidden",cursor:"pointer",animationDelay:`${i*0.04}s`,borderColor:isComplete?`${s.color}44`:isInProgress?`${s.color}22`:"#1A1A1A"}} onClick={()=>{setSi(i);setShowGuide(false);}}>
+                  <div style={{height:2,background:s.color,opacity:isComplete?1:isInProgress?0.6:0.2}}/>
+                  <div style={{padding:"13px 14px",display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{width:42,height:42,borderRadius:10,background:isComplete?`${s.color}22`:"#0D0D0D",border:`1.5px solid ${isComplete?s.color:isInProgress?s.color+"55":"#1A1A1A"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,position:"relative"}}>
+                      {isComplete?"✓":s.icon}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:4}}>
+                        <span style={{fontSize:9,color:s.color,opacity:0.6,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>0{i+1}</span>
+                        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:14,letterSpacing:2,color:isComplete?s.color:"#F0EDE8"}}>{s.label.toUpperCase()}</span>
+                      </div>
+                      <div style={{height:2,background:"#111",borderRadius:1,overflow:"hidden",marginBottom:4}}>
+                        <div style={{height:"100%",width:`${s.pct*100}%`,background:s.color,transition:"width 0.4s"}}/>
+                      </div>
+                      <div style={{fontSize:10,color:"#666"}}>{s.done}/{s.total} actions {isComplete?<span style={{color:"#00C9A7",marginLeft:6}}>· terminé</span>:isInProgress?<span style={{color:s.color,marginLeft:6}}>· en cours</span>:<span style={{marginLeft:6}}>· à démarrer</span>}</div>
+                    </div>
+                    <span style={{fontSize:18,color:"#333"}}>›</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div style={{background:"#0D0D0D",borderRadius:8,padding:"0 14px"}}>
-          {tasks.map((task,i)=>{const chk=!!checks[task.id];const showTip=tip===task.id;return(
-            <div key={task.id}>
-              <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"13px 0",borderBottom:i<tasks.length-1?"1px solid #0F0F0F":"none"}}>
-                <div onClick={()=>toggle(task.id)} style={{width:19,height:19,borderRadius:4,border:`1.5px solid ${chk?stage.color:"#2A2A2A"}`,background:chk?`${stage.color}18`:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{chk&&<span style={{fontSize:10,color:stage.color}}>✓</span>}</div>
-                <div style={{flex:1,fontSize:12,color:chk?"#444":"#CCC",textDecoration:chk?"line-through":"none",lineHeight:1.5}}>{task.text}</div>
-                <button onClick={e=>{e.stopPropagation();setTip(showTip?null:task.id);}} style={{background:"none",border:"none",color:"#2A2A2A",cursor:"pointer",fontSize:12,flexShrink:0}}>💡</button>
+      )}
+
+      {/* ── VUE 2 : ÉTAPE SÉLECTIONNÉE ──────────────────────────────────── */}
+      {si!==null&&stage&&(
+        <div>
+          {/* Tabs étapes (navigation rapide) */}
+          <div style={{display:"flex",overflowX:"auto",padding:"10px 14px",gap:6,borderBottom:"1px solid #0F0F0F",scrollbarWidth:"none"}}>
+            {STAGES.map((s,i)=>{const ts=TASKS[s.id]||[];const act=i===si;return(
+              <button key={s.id} onClick={()=>{setSi(i);setTip(null);}} style={{background:act?`${s.color}15`:"none",border:`1px solid ${act?s.color:"#1A1A1A"}`,color:act?s.color:"#999",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"7px 12px",borderRadius:20,cursor:"pointer",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                <span style={{fontSize:14}}>{s.icon}</span><span>{s.label.toUpperCase()}</span>
+                <div style={{display:"flex",gap:2}}>{ts.map((t,ti)=><div key={ti} style={{width:4,height:4,borderRadius:"50%",background:checks[t.id]?s.color:"#222"}}/>)}</div>
+              </button>
+            );})}
+          </div>
+
+          <div style={{padding:"18px 18px 0"}}>
+            {/* Header étape */}
+            <div style={{marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:4}}>
+                <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:38,color:stage.color,opacity:0.2}}>0{si+1}</span>
+                <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:3}}>{stage.label.toUpperCase()}</span>
               </div>
-              {showTip&&<div style={{background:"#111",borderLeft:`2px solid ${stage.color}`,borderRadius:"0 7px 7px 0",padding:"10px 12px",marginBottom:6,fontSize:11,color:"#888",lineHeight:1.6}}>{task.tip}</div>}
+              <div style={{height:2,background:"#111",borderRadius:1,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${pct*100}%`,background:stage.color,transition:"width 0.4s ease"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
+                <span style={{fontSize:10,color:"#888"}}>Progression</span>
+                <span style={{fontSize:10,color:stage.color}}>{done}/{tasks.length}</span>
+              </div>
             </div>
-          );})}
+
+            {/* Toggle Guide / Checklist */}
+            <div style={{display:"flex",gap:6,marginBottom:14,background:"#0D0D0D",borderRadius:8,padding:4}}>
+              <button onClick={()=>setShowGuide(false)} style={{flex:1,background:!showGuide?stage.color+"18":"none",border:"none",color:!showGuide?stage.color:"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"8px",borderRadius:6,cursor:"pointer",textTransform:"uppercase"}}>✓ Checklist ({tasks.length})</button>
+              <button onClick={()=>setShowGuide(true)} style={{flex:1,background:showGuide?stage.color+"18":"none",border:"none",color:showGuide?stage.color:"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"8px",borderRadius:6,cursor:"pointer",textTransform:"uppercase"}}>📖 Guide</button>
+            </div>
+
+            {/* GUIDE */}
+            {showGuide&&STAGE_GUIDE[stage.id]&&(
+              <div className="fu">
+                <div style={{background:"#0D0D0D",borderLeft:`3px solid ${stage.color}`,borderRadius:"0 8px 8px 0",padding:"14px 16px",marginBottom:14}}>
+                  <div style={{fontSize:9,color:stage.color,letterSpacing:2,marginBottom:6}}>◆ EN BREF</div>
+                  <div style={{fontSize:12,color:"#AAA",lineHeight:1.7}}>{STAGE_GUIDE[stage.id].intro}</div>
+                </div>
+                <div style={{fontSize:9,color:"#666",letterSpacing:2,marginBottom:8}}>LES 3 PILIERS</div>
+                {STAGE_GUIDE[stage.id].pillars.map((p,i)=>(
+                  <div key={i} style={{background:"#0D0D0D",border:"1px solid #141414",borderRadius:8,padding:"12px 14px",marginBottom:8}}>
+                    <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:5}}>
+                      <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:stage.color,opacity:0.4}}>0{i+1}</span>
+                      <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:13,letterSpacing:2}}>{p.t.toUpperCase()}</span>
+                    </div>
+                    <div style={{fontSize:11,color:"#888",lineHeight:1.6,paddingLeft:24}}>{p.d}</div>
+                  </div>
+                ))}
+                <div style={{background:"#0E0808",borderLeft:"3px solid #F03E3E",borderRadius:"0 8px 8px 0",padding:"12px 14px",marginTop:10,marginBottom:14}}>
+                  <div style={{fontSize:9,color:"#F03E3E",letterSpacing:2,marginBottom:5}}>⚠️ ATTENTION</div>
+                  <div style={{fontSize:11,color:"#999",lineHeight:1.6}}>{STAGE_GUIDE[stage.id].warning}</div>
+                </div>
+                <button className="btn-o" style={{width:"100%",marginBottom:18}} onClick={()=>setShowGuide(false)}>Voir la checklist →</button>
+              </div>
+            )}
+
+            {/* CHECKLIST */}
+            {!showGuide&&(
+              <>
+                <div style={{background:"#0C0C0C",border:`1px solid ${stage.color}15`,borderRadius:7,padding:"11px 14px",marginBottom:14}}>
+                  <div style={{fontSize:9,color:stage.color,letterSpacing:2,marginBottom:5}}>◆ COACH</div>
+                  <div style={{fontSize:12,color:"#888",lineHeight:1.7}}>
+                    {pct===0&&"Coche les éléments déjà validés pour évaluer où tu en es."}
+                    {pct>0&&pct<0.5&&"Bon début — chaque point coché réduit les risques."}
+                    {pct>=0.5&&pct<1&&"Presque prêt. Quelques points restants."}
+                    {pct===1&&<span style={{color:stage.color}}>✓ Étape complète. Passe à la suivante.</span>}
+                  </div>
+                </div>
+                <div style={{background:"#0D0D0D",borderRadius:8,padding:"0 14px"}}>
+                  {tasks.map((task,i)=>{const chk=!!checks[task.id];const showTip=tip===task.id;return(
+                    <div key={task.id}>
+                      <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"13px 0",borderBottom:i<tasks.length-1?"1px solid #0F0F0F":"none"}}>
+                        <div onClick={()=>toggle(task.id)} style={{width:19,height:19,borderRadius:4,border:`1.5px solid ${chk?stage.color:"#2A2A2A"}`,background:chk?`${stage.color}18`:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{chk&&<span style={{fontSize:10,color:stage.color}}>✓</span>}</div>
+                        <div style={{flex:1,fontSize:12,color:chk?"#444":"#CCC",textDecoration:chk?"line-through":"none",lineHeight:1.5}}>{task.text}</div>
+                        <button onClick={e=>{e.stopPropagation();setTip(showTip?null:task.id);}} style={{background:"none",border:"none",color:"#2A2A2A",cursor:"pointer",fontSize:12,flexShrink:0}}>💡</button>
+                      </div>
+                      {showTip&&<div style={{background:"#111",borderLeft:`2px solid ${stage.color}`,borderRadius:"0 7px 7px 0",padding:"10px 12px",marginBottom:6,fontSize:11,color:"#888",lineHeight:1.6}}>{task.tip}</div>}
+                    </div>
+                  );})}
+                </div>
+              </>
+            )}
+
+            {/* Navigation entre étapes */}
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:22,paddingBottom:20}}>
+              {si>0&&<button className="btn-o" onClick={()=>{setSi(si-1);setTip(null);setShowGuide(false);}}>← Précédent</button>}
+              {si<STAGES.length-1&&<button className="btn-o" style={{marginLeft:"auto"}} onClick={()=>{setSi(si+1);setTip(null);setShowGuide(false);}}>Suivant →</button>}
+            </div>
+          </div>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:22,paddingBottom:20}}>
-          {si>0&&<button className="btn-o" onClick={()=>{setSi(si-1);setTip(null);}}>← Précédent</button>}
-          {si<STAGES.length-1&&<button className="btn-o" style={{marginLeft:"auto"}} onClick={()=>{setSi(si+1);setTip(null);}}>Suivant →</button>}
-        </div>
-      </div>
+      )}
+      {showBoostToast&&<GateToast onUpgrade={onGoPlan}/>}
     </div>
   );
 }
@@ -775,9 +1111,26 @@ function Bibliotheque({plan,onGoPlan,onBack}){
   const isDocLocked=(d)=>plan==="free"||(plan==="artiste"&&d.plan==="label");
   const cats=["Tous",...new Set(DOCS.map(d=>d.cat))];
   const filtered=catFilter==="Tous"?DOCS:DOCS.filter(d=>d.cat===catFilter);
-  const handleDoc=(d)=>{
-    if(isDocLocked(d)){setShowToast(true);setTimeout(()=>setShowToast(false),3000);}
-    else{alert('Téléchargement de "'+d.titre+'" — intégration Supabase Storage à venir.');}
+  const [downloading,setDownloading]=useState(null);
+  const [dlMsg,setDlMsg]=useState(null);
+  const handleDoc=async(d)=>{
+    if(isDocLocked(d)){setShowToast(true);setTimeout(()=>setShowToast(false),3000);return;}
+    const sb = await initSupabase();
+    if(!sb){setDlMsg("📄 "+d.titre+" — Mode démo · upload tes PDFs sur Supabase pour activer");setTimeout(()=>setDlMsg(null),3500);return;}
+    setDownloading(d.id);
+    try{
+      const path=`${d.id}.pdf`;
+      const {data,error}=await sb.storage.from("documents").createSignedUrl(path,60);
+      if(error||!data?.signedUrl){
+        setDlMsg("⚠️ "+d.titre+" indisponible — upload le PDF dans le bucket 'documents'");
+        setTimeout(()=>setDlMsg(null),4500);
+      } else {
+        window.open(data.signedUrl,"_blank");
+        setDlMsg("✓ "+d.titre+" ouvert");
+        setTimeout(()=>setDlMsg(null),2500);
+      }
+    }catch(e){setDlMsg("Erreur : "+e.message);setTimeout(()=>setDlMsg(null),3500);}
+    setDownloading(null);
   };
   const accessible=filtered.filter(d=>!isDocLocked(d)).length;
   return(
@@ -1070,6 +1423,11 @@ function Profil({plan,setPlan,user,onGoPlan,onBack}){
         <div className="card" style={{padding:18}}><div style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,marginBottom:10}}>PROFIL ARTISTE</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,letterSpacing:3}}>{user?.name||"Artiste"}</div><div style={{fontSize:11,color:"#555",marginTop:2}}>{user?.genre||"Genre non défini"}</div></div>
         <div className="card" style={{padding:18}}><div style={{fontSize:9,color:cur.c,letterSpacing:2,marginBottom:6}}>ABONNEMENT ACTUEL</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:3,color:cur.c}}>{cur.l}</div>{plan==="free"&&<button className="btn" style={{marginTop:12}} onClick={onGoPlan}>Passer à ARTISTE — 9,90€/mois →</button>}</div>
         {plan!=="free"&&<div className="card" style={{padding:18}}><div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:10}}>GÉRER MON ABONNEMENT</div><button className="btn-o" style={{width:"100%",marginBottom:8}} onClick={onGoPlan}>Changer de plan</button><button className="btn-o" style={{width:"100%",color:"#F03E3E44",borderColor:"#F03E3E22"}} onClick={()=>setPlan("free")}>Résilier (simulation)</button></div>}
+        <div className="card" style={{padding:18}}>
+          <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:10}}>COMPTE</div>
+          {user?.email&&<div style={{fontSize:11,color:"#888",marginBottom:10,wordBreak:"break-all"}}>{user.email}</div>}
+          <button className="btn-o" style={{width:"100%",color:"#666",borderColor:"#222"}} onClick={async()=>{if(!window.confirm("Te déconnecter de INDY ?"))return;if(supabase&&supabase.auth)await supabase.auth.signOut();window.location.reload();}}>Se déconnecter</button>
+        </div>
       </div>
     </div>
   );
@@ -1150,7 +1508,7 @@ function Chatbot({plan,onUpgrade,onClose}){
 // ─── APP ROOT — état centralisé, navigation propre ───────────────────────────
 export default function INDYComplete(){
   // ── État global (1 seul endroit) ──────────────────────────────────────────
-  const [screen,  setScreen]  = useState("landing");   // landing | onboarding | paywall | app
+  const [screen,  setScreen]  = useState("landing");   // landing | auth | onboarding | paywall | app
   const [plan,    setPlan]    = useState("free");       // free | artiste | label
   const [user,    setUser]    = useState(null);
   const [view,    setView]    = useState("dashboard");
@@ -1159,6 +1517,31 @@ export default function INDYComplete(){
   const [activeId,setActiveId]= useState(null);
   const [showMore,setShowMore]= useState(false);
   const [showChat,setShowChat]= useState(false);
+  const [authReady,setAuthReady]= useState(false);  // true après tentative restore session
+
+  // ── Restauration session Supabase au chargement ───────────────────────────
+  useEffect(()=>{
+    (async()=>{
+      const sb = await initSupabase();
+      if(!sb){setAuthReady(true);return;}
+      try{
+        const {data:{session}} = await sb.auth.getSession();
+        if(session?.user){
+          const {data:profile} = await sb.from("profiles").select("*").eq("id",session.user.id).single();
+          if(profile){
+            setUser({id:session.user.id,email:session.user.email,name:profile.name,genre:profile.genre});
+            setPlan(profile.plan||"free");
+            setScreen("app");
+          }
+        }
+      }catch(e){console.warn("Session restore error",e);}
+      setAuthReady(true);
+      const {data:listener} = sb.auth.onAuthStateChange((event)=>{
+        if(event==="SIGNED_OUT"){setUser(null);setPlan("free");setScreen("landing");}
+      });
+      return ()=>listener?.subscription?.unsubscribe();
+    })();
+  },[]);
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const goTo=(v)=>{setHistory(h=>[...h,view]);setView(v);setShowMore(false);};
@@ -1175,7 +1558,7 @@ export default function INDYComplete(){
   // ── Contenu principal ─────────────────────────────────────────────────────
   const VIEWS = {
     dashboard:   <Dashboard    projects={projects} setProjects={setProjects} onGoCoach={goCoach} onGoPlan={goPaywall} plan={plan} user={user}/>,
-    coach:       <Coach        projects={projects} setProjects={setProjects} activeId={activeId} setActiveId={setActiveId}/>,
+    coach:       <Coach        projects={projects} setProjects={setProjects} activeId={activeId} setActiveId={setActiveId} plan={plan} onGoPlan={goPaywall}/>,
     presskit:    <PressKit     projects={projects} plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
     booking:     <Booking      plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
     bibliotheque:<Bibliotheque plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
@@ -1201,9 +1584,13 @@ export default function INDYComplete(){
   ];
 
   // ── Écrans ────────────────────────────────────────────────────────────────
-  if(screen==="landing")    return <div style={{background:"#060606",minHeight:"100vh"}}><style>{CSS}</style><Landing onEnter={()=>setScreen("onboarding")}/></div>;
-  if(screen==="onboarding") return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Onboarding onDone={u=>{setUser(u);setScreen("paywall");}}/></div>;
-  if(screen==="paywall")    return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Paywall onSelect={p=>{setPlan(p);setScreen("app");}} current={plan}/></div>;
+  // Loader pendant la restauration de session
+  if(!authReady) return <div style={{background:"#080808",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:"#FF6B35",fontFamily:"'Inter',sans-serif"}}><style>{CSS}</style><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16}}><Logo size={60} anim/><div style={{fontSize:11,letterSpacing:3}}>CHARGEMENT…</div></div></div>;
+
+  if(screen==="landing")    return <div style={{background:"#060606",minHeight:"100vh"}}><style>{CSS}</style><Landing onEnter={()=>setScreen("auth")}/></div>;
+  if(screen==="auth")       return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Auth onBack={()=>setScreen("landing")} onSuccess={u=>{setUser(u);setPlan(u.plan||"free");setScreen(u.name?"paywall":"onboarding");}}/></div>;
+  if(screen==="onboarding") return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Onboarding onDone={async(u)=>{const merged={...user,...u};setUser(merged);if(supabase&&merged.id){try{await supabase.from("profiles").update({name:u.name,genre:u.genre}).eq("id",merged.id);}catch(e){console.warn(e);}}setScreen("paywall");}}/></div>;
+  if(screen==="paywall")    return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Paywall onSelect={async(p)=>{setPlan(p);if(supabase&&user?.id){try{await supabase.from("profiles").update({plan:p}).eq("id",user.id);}catch(e){console.warn(e);}}setScreen("app");}} current={plan}/></div>;
 
   return(
     <div style={{background:"#080808",minHeight:"100vh"}}>
