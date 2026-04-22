@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // ─── SUPABASE CLIENT (lazy loaded, compatible preview + prod) ─────────────────
-// En prod (Vercel/Vite) : variables d'env du build → exposées sur window.__INDY_ENV__
-// En preview Claude : pas de Supabase → mode démo silencieux
-const getEnv = (key) => {
-  if (typeof window !== "undefined" && window.__INDY_ENV__?.[key]) return window.__INDY_ENV__[key];
-  if (typeof globalThis !== "undefined" && globalThis[key]) return globalThis[key];
-  return "";
-};
-const SUPABASE_URL = getEnv("VITE_SUPABASE_URL");
-const SUPABASE_ANON_KEY = getEnv("VITE_SUPABASE_ANON_KEY");
+let SUPABASE_URL = "";
+let SUPABASE_ANON_KEY = "";
+try {
+  SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
+  SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+} catch(e) {
+  // Preview Claude : import.meta non dispo → mode démo
+}
 
 let supabase = null;
 const initSupabase = async () => {
