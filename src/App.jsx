@@ -1,14 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 
-// ─── SUPABASE CLIENT (lazy loaded, compatible preview + prod) ─────────────────
-let SUPABASE_URL = "";
-let SUPABASE_ANON_KEY = "";
-try {
-  SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-  SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-} catch(e) {
-  // Preview Claude : import.meta non dispo → mode démo
-}
+// ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://jutexndjwouyucfdkcmp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1dGV4bmRqd291eXVjZmRrY21wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NjA3OTIsImV4cCI6MjA5MjEzNjc5Mn0.5wn8Z1KUVAdo7K28AeVcgfG1JUFmoEXAlaeKAeXXwgA";
 
 let supabase = null;
 const initSupabase = async () => {
