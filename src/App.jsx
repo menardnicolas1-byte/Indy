@@ -9,7 +9,7 @@ const initSupabase = async () => {
 if (supabase) return supabase;
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
 try {
-const mod = await import(/* @vite-ignore */ “https://esm.sh/@supabase/supabase-js@2”);
+const mod = await import(“https://esm.sh/@supabase/supabase-js@2”);
 supabase = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 return supabase;
 } catch (e) {
