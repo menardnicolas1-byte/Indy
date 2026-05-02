@@ -2414,68 +2414,293 @@ function Annuaire({plan,onGoPlan,onBack}){
   );
 }
 
-// ─── SUBVENTIONS ─────────────────────────────────────────────────────────────
+// ─── SUBVENTIONS ENRICHI ──────────────────────────────────────────────────────
+// v2 : matching + deadlines + checklist dossier + sauvegarde + appels à projets
+const AIDES_DEADLINES = {
+  cnm_prod:   {deadline:"31 mars · 30 juin · 30 sept · 31 déc",recurrence:"Trimestriel",urgency:null},
+  cnm_clip:   {deadline:"31 mars · 30 juin · 30 sept · 31 déc",recurrence:"Trimestriel",urgency:null},
+  sacem_bourse:{deadline:"15 février · 15 septembre",recurrence:"2×/an",urgency:null},
+  adami:      {deadline:"1er mars · 1er octobre",recurrence:"2×/an",urgency:null},
+  spedidam:   {deadline:"Ouvert en continu",recurrence:"Continu",urgency:null},
+  drac:       {deadline:"Variable selon région",recurrence:"Variable",urgency:null},
+  kkbb:       {deadline:"Aucune — lancement libre",recurrence:"Libre",urgency:null},
+};
+const AIDES_CHECKLIST = {
+  cnm_prod:   ["Compte CNM créé (cnm.fr)","SIRET ou statut artistique valide","Maquette ou projet finalisé","Devis de production","Budget prévisionnel détaillé","Dossier artistique (bio + visuels)"],
+  cnm_clip:   ["Compte CNM créé","Devis réalisateur","Storyboard ou traitement","Budget clip","Distribution confirmée"],
+  sacem_bourse:["Membre SACEM actif (12 mois min.)","Projet de création défini","Dossier artistique complet","Justificatifs revenus artistiques"],
+  adami:      ["Être artiste-interprète (intermittent ou équivalent)","Projet structuré avec budget","Contrats ou preuves d'activité","Dossier en ligne sur adami.fr"],
+  spedidam:   ["Être musicien interprète","Preuves d'activité scénique","Projet avec budget","Dossier sur spedidam.fr"],
+  drac:       ["Contacter ta DRAC régionale","Ancrage territorial du projet","Association ou structure légale","Dossier artistique + budget"],
+  kkbb:       ["Contreparties définies","Vidéo de présentation (60-90s)","Objectif réaliste (60-70% de ta cible réelle)","Communauté active prête à soutenir"],
+};
+const APPELS_PROJETS = [
+  {id:"ap1",titre:"CNM — Aide à l'export",org:"Centre National de la Musique",icon:"🌍",color:"#FF6B35",montant:"Jusqu'à 30 000 €",deadline:"30 juin 2026",desc:"Soutien aux artistes français souhaitant développer leur carrière à l'international.",lien:"https://cnm.fr/aides/",tags:["Export","International","Label"]},
+  {id:"ap2",titre:"SACEM — Aide numérique",org:"SACEM",icon:"💻",color:"#845EF7",montant:"1 000 – 5 000 €",deadline:"15 sept. 2026",desc:"Aide à la création de contenu numérique, clips, vidéos pour membres SACEM.",lien:"https://www.sacem.fr",tags:["Numérique","Clip","Membre SACEM"]},
+  {id:"ap3",titre:"Région IDF — Aide jeunes artistes",org:"Île-de-France",icon:"🗼",color:"#74C0FC",montant:"3 000 – 15 000 €",deadline:"1er sept. 2026",desc:"Aide à l'émergence pour les artistes franciliens de moins de 35 ans.",lien:"https://www.lerif.org",tags:["IDF","Émergence","Jeunes"]},
+  {id:"ap4",titre:"ADAMI — Aide à la création",org:"ADAMI",icon:"🎤",color:"#F03E3E",montant:"2 000 – 10 000 €",deadline:"1er oct. 2026",desc:"Soutien aux projets de création live et enregistrement pour artistes-interprètes.",lien:"https://www.adami.fr",tags:["Live","Enregistrement","Interprètes"]},
+  {id:"ap5",titre:"CNM — Tournée nationale",org:"Centre National de la Musique",icon:"🚌",color:"#20C997",montant:"Jusqu'à 40 000 €",deadline:"30 sept. 2026",desc:"Aide à la diffusion live pour les artistes en tournée nationale.",lien:"https://cnm.fr/aides/",tags:["Tournée","Live","National"]},
+  {id:"ap6",titre:"SPEDIDAM — Enregistrement",org:"SPEDIDAM",icon:"🥁",color:"#FFD43B",montant:"500 – 6 000 €",deadline:"Continu",desc:"Soutien aux enregistrements de musiciens interprètes.",lien:"https://www.spedidam.fr/aides/",tags:["Enregistrement","Studio","Musiciens"]},
+];
+
 function Subventions({plan,onGoPlan,onBack}){
-  const [ans,setAns]=useState({});const [qi,setQi]=useState(0);const [phase,setPhase]=useState("q");const [exp,setExp]=useState(null);
+  const [ans,setAns]=useState({});
+  const [qi,setQi]=useState(0);
+  const [phase,setPhase]=useState("q"); // q | results | detail | appels
+  const [exp,setExp]=useState(null);
+  const [saved,setSaved]=useState(()=>{try{return JSON.parse(localStorage.getItem("indy_saved_aides")||"[]");}catch{return [];}});
   const [showToastSub,setShowToastSub]=useState(false);
+  const [tab,setTab]=useState("matching"); // matching | appels
+
+  const saveAide=(id)=>{
+    const next=saved.includes(id)?saved.filter(x=>x!==id):[...saved,id];
+    setSaved(next);
+    try{localStorage.setItem("indy_saved_aides",JSON.stringify(next));}catch{}
+  };
+
+  // Calcul jours avant deadline
+  const daysToDeadline=(str)=>{
+    if(!str||str.includes("Continu")||str.includes("Variable")||str.includes("Libre"))return null;
+    // Chercher une date type "31 mars", "15 sept. 2026"
+    const parts=str.split("·");
+    const first=parts[0].trim();
+    const d=new Date(first+" 2026");
+    if(isNaN(d))return null;
+    return Math.ceil((d-new Date())/86400000);
+  };
+
   if(plan==="free")return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
       <Hdr sub="FINANCEMENT & AIDES" accent="#F03E3E" onBack={onBack}/>
-      <div style={{padding:"12px 18px",background:"#0D0D0D",borderBottom:"1px solid #111",fontSize:11,color:"#555",lineHeight:1.6}}><span style={{color:"#F03E3E",fontSize:9,letterSpacing:2,display:"block",marginBottom:3}}>◆ MATCHING SUBVENTIONS</span>4 questions → tes aides personnalisées. Réservé aux abonnés.</div>
+      <div style={{padding:"12px 18px",background:"#0D0D0D",borderBottom:"1px solid #111",fontSize:11,color:"#555",lineHeight:1.6}}>
+        <span style={{color:"#F03E3E",fontSize:9,letterSpacing:2,display:"block",marginBottom:3}}>◆ MATCHING SUBVENTIONS</span>
+        4 questions → tes aides personnalisées. Réservé aux abonnés.
+      </div>
       {FINANCEMENT_QS.map((q,i)=>(
         <div key={q.id} style={{padding:"14px 18px",borderBottom:"1px solid #0F0F0F",opacity:i===0?0.7:0.3}}>
           <div style={{fontSize:9,color:"#555",letterSpacing:1,fontWeight:600,marginBottom:5}}>QUESTION {i+1}/4</div>
           <div style={{fontSize:14,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,marginBottom:10,color:"#333"}}>{q.q.toUpperCase()}</div>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>{q.opts.map(opt=><div key={opt.v} onClick={()=>{setShowToastSub(true);setTimeout(()=>setShowToastSub(false),3000);}} style={{background:"#0A0A0A",border:"1px solid #0F0F0F",color:"#2A2A2A",fontFamily:"'Inter',sans-serif",fontSize:12,padding:"10px 14px",borderRadius:7,cursor:"pointer",display:"flex",gap:10}}><span style={{width:16,height:16,borderRadius:"50%",border:"1.5px solid #1A1A1A",flexShrink:0}}></span>{opt.l}</div>)}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {q.opts.map(opt=><div key={opt.v} onClick={()=>{setShowToastSub(true);setTimeout(()=>setShowToastSub(false),3000);}} style={{background:"#0A0A0A",border:"1px solid #0F0F0F",color:"#2A2A2A",fontFamily:"'Inter',sans-serif",fontSize:12,padding:"10px 14px",borderRadius:7,cursor:"pointer",display:"flex",gap:10}}><span style={{width:16,height:16,borderRadius:"50%",border:"1.5px solid #1A1A1A",flexShrink:0}}/>{opt.l}</div>)}
+          </div>
         </div>
       ))}
       <div style={{padding:"16px 18px"}}><button className="btn" onClick={onGoPlan}>Débloquer le matching — 9,90€/mois →</button></div>
       {showToastSub&&<GateToast onUpgrade={onGoPlan}/>}
     </div>
   );
+
   const answer=(qid,val)=>{const n={...ans,[qid]:val};setAns(n);if(qi<FINANCEMENT_QS.length-1)setTimeout(()=>setQi(qi+1),280);};
   const allDone=Object.keys(ans).length===FINANCEMENT_QS.length;
   const results=AIDES.map(a=>({...a,score:scoreAide(a,ans)})).filter(a=>a.score>=40).sort((a,b)=>b.score-a.score);
-  const top=results.filter(a=>a.score>=70);const possible=results.filter(a=>a.score<70);
+  const top=results.filter(a=>a.score>=70);
+  const possible=results.filter(a=>a.score<70);
+
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="FINANCEMENT & DÉMARCHES" accent="#F03E3E" onBack={onBack} right={phase==="results"&&<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>{setPhase("q");setAns({});setQi(0);}}>↺ Refaire</button>}/>
-      {phase==="q"&&(
+      <Hdr sub="FINANCEMENT & DÉMARCHES" accent="#F03E3E" onBack={onBack}
+        right={phase==="results"&&<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>{setPhase("q");setAns({});setQi(0);}}>↺ Refaire</button>}
+      />
+
+      {/* Tabs Matching / Appels à projets */}
+      <div style={{display:"flex",borderBottom:"1px solid #111"}}>
+        <button onClick={()=>{setTab("matching");if(phase==="appels")setPhase("q");}} style={{flex:1,background:tab==="matching"?"#F03E3E12":"none",border:"none",borderBottom:`2px solid ${tab==="matching"?"#F03E3E":"transparent"}`,color:tab==="matching"?"#F03E3E":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>🎯 Matching</button>
+        <button onClick={()=>{setTab("appels");setPhase("appels");}} style={{flex:1,background:tab==="appels"?"#F03E3E12":"none",border:"none",borderBottom:`2px solid ${tab==="appels"?"#F03E3E":"transparent"}`,color:tab==="appels"?"#F03E3E":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>📅 Appels à projets</button>
+        {saved.length>0&&<button onClick={()=>setPhase("saved")} style={{flex:1,background:phase==="saved"?"#FFD43B12":"none",border:"none",borderBottom:`2px solid ${phase==="saved"?"#FFD43B":"transparent"}`,color:phase==="saved"?"#FFD43B":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>⭐ Sauvés ({saved.length})</button>}
+      </div>
+
+      {/* ── TAB MATCHING ─────────────────────────────────────── */}
+      {tab==="matching"&&phase==="q"&&(
         <div style={{padding:"20px 18px"}}>
-          <div style={{display:"flex",gap:5,marginBottom:24}}>{FINANCEMENT_QS.map((q,i)=><div key={i} style={{flex:1,height:3,borderRadius:2,background:ans[q.id]?"#F03E3E":i===qi?"#2A2A2A":"#111",transition:"background 0.3s"}}/>)}</div>
+          <div style={{display:"flex",gap:5,marginBottom:24}}>
+            {FINANCEMENT_QS.map((q,i)=><div key={i} style={{flex:1,height:3,borderRadius:2,background:ans[q.id]?"#F03E3E":i===qi?"#2A2A2A":"#111",transition:"background 0.3s"}}/>)}
+          </div>
           {FINANCEMENT_QS.map((q,i)=>{if(i!==qi)return null;return(
             <div key={q.id} className="fu">
               <div style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,marginBottom:6}}>QUESTION {i+1}/{FINANCEMENT_QS.length}</div>
               <div style={{fontSize:18,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,marginBottom:18}}>{q.q.toUpperCase()}</div>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>{q.opts.map(opt=><button key={opt.v} onClick={()=>answer(q.id,opt.v)} style={{background:ans[q.id]===opt.v?"#150808":"#0D0D0D",border:`1px solid ${ans[q.id]===opt.v?"#F03E3E":"#1A1A1A"}`,color:ans[q.id]===opt.v?"#F03E3E":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"13px 15px",borderRadius:7,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:10}}><span style={{width:16,height:16,borderRadius:"50%",border:`1.5px solid ${ans[q.id]===opt.v?"#F03E3E":"#333"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#F03E3E",flexShrink:0}}>{ans[q.id]===opt.v?"✓":""}</span>{opt.l}</button>)}</div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>{i>0?<button className="btn-o" onClick={()=>setQi(i-1)}>← Retour</button>:<div/>}{allDone&&<button className="btn" style={{width:"auto",padding:"10px 20px",background:"#F03E3E"}} onClick={()=>setPhase("results")}>Voir mes aides →</button>}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {q.opts.map(opt=>(
+                  <button key={opt.v} onClick={()=>answer(q.id,opt.v)} style={{background:ans[q.id]===opt.v?"#150808":"#0D0D0D",border:`1px solid ${ans[q.id]===opt.v?"#F03E3E":"#1A1A1A"}`,color:ans[q.id]===opt.v?"#F03E3E":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"13px 15px",borderRadius:7,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{width:16,height:16,borderRadius:"50%",border:`1.5px solid ${ans[q.id]===opt.v?"#F03E3E":"#333"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#F03E3E",flexShrink:0}}>{ans[q.id]===opt.v?"✓":""}</span>
+                    {opt.l}
+                  </button>
+                ))}
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>
+                {i>0?<button className="btn-o" onClick={()=>setQi(i-1)}>← Retour</button>:<div/>}
+                {allDone&&<button className="btn" style={{width:"auto",padding:"10px 20px",background:"#F03E3E"}} onClick={()=>setPhase("results")}>Voir mes aides →</button>}
+              </div>
             </div>
           );})}
         </div>
       )}
-      {phase==="results"&&(
-        <div style={{padding:"18px 18px 20px"}}>
-          <div style={{background:"#0D0D0D",border:"1px solid #F03E3E18",borderRadius:8,padding:"14px",marginBottom:18}}><div style={{fontSize:9,color:"#F03E3E",letterSpacing:2,marginBottom:5}}>◆ RÉSULTAT MATCHING</div><div style={{fontSize:20,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>{results.length} AIDE{results.length>1?"S":""} IDENTIFIÉE{results.length>1?"S":""}</div><div style={{fontSize:11,color:"#999",marginTop:3}}>{top.length} forte{top.length>1?"s":""} · {possible.length} possible{possible.length>1?"s":""}</div></div>
-          {top.length>0&&<><div style={{fontSize:9,letterSpacing:3,color:"#F03E3E",marginBottom:10}}>✦ CORRESPONDANCES FORTES</div>{top.map(a=><AideCard key={a.id} aide={a} expanded={exp===a.id} onToggle={()=>setExp(exp===a.id?null:a.id)}/>)}</>}
-          {possible.length>0&&<><div style={{fontSize:9,letterSpacing:3,color:"#999",marginTop:16,marginBottom:10}}>◦ AIDES POSSIBLES</div>{possible.map(a=><AideCard key={a.id} aide={a} expanded={exp===a.id} onToggle={()=>setExp(exp===a.id?null:a.id)}/>)}</>}
+
+      {tab==="matching"&&phase==="results"&&(
+        <div style={{padding:"14px 18px 20px"}}>
+          {/* Résumé */}
+          <div style={{background:"#0D0D0D",border:"1px solid #F03E3E18",borderRadius:8,padding:"14px",marginBottom:18}}>
+            <div style={{fontSize:9,color:"#F03E3E",letterSpacing:2,marginBottom:5}}>◆ RÉSULTAT MATCHING</div>
+            <div style={{fontSize:20,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>{results.length} AIDE{results.length>1?"S":""} IDENTIFIÉE{results.length>1?"S":""}</div>
+            <div style={{fontSize:11,color:"#999",marginTop:3}}>{top.length} forte{top.length>1?"s":""} · {possible.length} possible{possible.length>1?"s":""}</div>
+          </div>
+          {top.length>0&&(
+            <>
+              <div style={{fontSize:9,letterSpacing:3,color:"#F03E3E",marginBottom:10}}>✦ CORRESPONDANCES FORTES</div>
+              {top.map(a=><AideCardV2 key={a.id} aide={a} expanded={exp===a.id} onToggle={()=>setExp(exp===a.id?null:a.id)} saved={saved.includes(a.id)} onSave={()=>saveAide(a.id)}/>)}
+            </>
+          )}
+          {possible.length>0&&(
+            <>
+              <div style={{fontSize:9,letterSpacing:3,color:"#999",marginTop:16,marginBottom:10}}>◦ AIDES POSSIBLES</div>
+              {possible.map(a=><AideCardV2 key={a.id} aide={a} expanded={exp===a.id} onToggle={()=>setExp(exp===a.id?null:a.id)} saved={saved.includes(a.id)} onSave={()=>saveAide(a.id)}/>)}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB APPELS À PROJETS ─────────────────────────────── */}
+      {phase==="appels"&&(
+        <div style={{padding:"14px 18px 20px"}}>
+          <div style={{fontSize:11,color:"#555",lineHeight:1.6,marginBottom:14}}>
+            <span style={{color:"#F03E3E",fontSize:9,letterSpacing:2,display:"block",marginBottom:4}}>◆ APPELS EN COURS</span>
+            Opportunités actives — deadlines 2026. Sauvegarde celles qui t'intéressent.
+          </div>
+          {APPELS_PROJETS.map((ap,i)=>{
+            const days=daysToDeadline(ap.deadline);
+            const urgent=days!==null&&days<=30;
+            return(
+              <div key={ap.id} className="fu card" style={{padding:0,overflow:"hidden",marginBottom:10,animationDelay:`${i*0.04}s`,borderColor:saved.includes(ap.id)?`${ap.color}44`:"#1A1A1A"}}>
+                <div style={{height:2,background:ap.color}}/>
+                <div style={{padding:"13px 14px"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                    <span style={{fontSize:20,flexShrink:0}}>{ap.icon}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:3}}>
+                        <div style={{fontSize:12,color:"#CCC",fontWeight:600,lineHeight:1.3}}>{ap.titre}</div>
+                        <button onClick={()=>saveAide(ap.id)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",flexShrink:0,opacity:saved.includes(ap.id)?1:0.3,transition:"opacity 0.2s"}}>⭐</button>
+                      </div>
+                      <div style={{fontSize:9,color:"#777",letterSpacing:1,marginBottom:6}}>{ap.org.toUpperCase()}</div>
+                      <div style={{fontSize:11,color:"#666",lineHeight:1.5,marginBottom:8}}>{ap.desc}</div>
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                        <span style={{fontSize:10,color:ap.color,background:`${ap.color}15`,padding:"2px 8px",borderRadius:20}}>{ap.montant}</span>
+                        <span style={{fontSize:9,color:urgent?"#F03E3E":"#555",background:urgent?"#F03E3E12":"#111",padding:"2px 8px",borderRadius:20,border:urgent?"1px solid #F03E3E33":"none"}}>
+                          {urgent?"⚠️ ":"📅 "}{ap.deadline}
+                          {days!==null&&<span style={{marginLeft:4,fontWeight:600}}>· J-{days}</span>}
+                        </span>
+                      </div>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
+                        {ap.tags.map(t=><span key={t} className="chip">{t}</span>)}
+                      </div>
+                      <a href={ap.lien} target="_blank" rel="noopener noreferrer" style={{display:"inline-block",fontSize:10,color:ap.color,letterSpacing:1,textDecoration:"none",border:`1px solid ${ap.color}44`,padding:"5px 12px",borderRadius:6}}>Voir le dossier ↗</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── TAB SAUVEGARDÉS ──────────────────────────────────── */}
+      {phase==="saved"&&(
+        <div style={{padding:"14px 18px 20px"}}>
+          <div style={{fontSize:9,color:"#FFD43B",letterSpacing:2,marginBottom:14}}>⭐ AIDES SAUVEGARDÉES</div>
+          {saved.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#555",fontSize:12}}>Aucune aide sauvegardée. Utilise ⭐ sur les fiches.</div>}
+          {[...AIDES,...APPELS_PROJETS].filter(a=>saved.includes(a.id)).map(a=>{
+            const isAide=!!a.score||AIDES.find(x=>x.id===a.id);
+            if(isAide){
+              const full=AIDES.find(x=>x.id===a.id)||a;
+              return <AideCardV2 key={full.id} aide={{...full,score:full.score||80}} expanded={exp===full.id} onToggle={()=>setExp(exp===full.id?null:full.id)} saved onSave={()=>saveAide(full.id)}/>;
+            }
+            const days=daysToDeadline(a.deadline);
+            return(
+              <div key={a.id} style={{background:"#0D0D0D",border:`1px solid ${a.color}33`,borderRadius:9,padding:"12px 14px",marginBottom:10,display:"flex",gap:10,alignItems:"flex-start"}}>
+                <span style={{fontSize:18}}>{a.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,color:"#CCC",fontWeight:600,marginBottom:3}}>{a.titre}</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    <span style={{fontSize:10,color:a.color}}>{a.montant}</span>
+                    {days!==null&&<span style={{fontSize:9,color:days<=30?"#F03E3E":"#555"}}>J-{days}</span>}
+                  </div>
+                </div>
+                <button onClick={()=>saveAide(a.id)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer"}}>⭐</button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
-function AideCard({aide,expanded,onToggle}){
+
+// AideCardV2 — version enrichie avec deadline + checklist dossier + sauvegarde
+function AideCardV2({aide,expanded,onToggle,saved,onSave}){
+  const dl=AIDES_DEADLINES[aide.id];
+  const checklist=AIDES_CHECKLIST[aide.id]||[];
+  const [checks,setChecks]=useState({});
+  const done=checklist.filter((_,i)=>checks[i]).length;
+
   return(
     <div style={{background:"#0D0D0D",border:`1px solid ${expanded?aide.color+"44":"#1A1A1A"}`,borderRadius:9,overflow:"hidden",marginBottom:10}}>
       <div style={{padding:"13px 14px",cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}} onClick={onToggle}>
         <span style={{fontSize:18,flexShrink:0}}>{aide.icon}</span>
-        <div style={{flex:1}}><div style={{fontSize:12,color:expanded?aide.color:"#CCC",lineHeight:1.3,marginBottom:4}}>{aide.nom}</div><div style={{fontSize:9,color:"#888",letterSpacing:1,marginBottom:6}}>{aide.org.toUpperCase()}</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{fontSize:10,color:aide.color,background:`${aide.color}15`,padding:"2px 8px",borderRadius:20}}>{aide.montant}</span><span style={{fontSize:9,color:"#888"}}>{aide.delai}</span></div></div>
-        <span style={{fontSize:10,color:aide.score>=70?aide.color:"#999",background:`${aide.score>=70?aide.color:"#1A1A1A"}18`,border:`1px solid ${aide.score>=70?aide.color+"44":"#1E1E1E"}`,padding:"3px 7px",borderRadius:20,flexShrink:0}}>{aide.score}%</span>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,color:expanded?aide.color:"#CCC",lineHeight:1.3,marginBottom:4}}>{aide.nom}</div>
+          <div style={{fontSize:9,color:"#888",letterSpacing:1,marginBottom:6}}>{aide.org.toUpperCase()}</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,color:aide.color,background:`${aide.color}15`,padding:"2px 8px",borderRadius:20}}>{aide.montant}</span>
+            <span style={{fontSize:9,color:"#888"}}>{aide.delai}</span>
+            {dl&&<span style={{fontSize:9,color:"#555",background:"#111",padding:"2px 7px",borderRadius:20}}>📅 {dl.deadline}</span>}
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
+          <span style={{fontSize:10,color:aide.score>=70?aide.color:"#999",background:`${aide.score>=70?aide.color:"#1A1A1A"}18`,border:`1px solid ${aide.score>=70?aide.color+"44":"#1E1E1E"}`,padding:"3px 7px",borderRadius:20}}>{aide.score}%</span>
+          <button onClick={e=>{e.stopPropagation();onSave();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:saved?1:0.3,transition:"opacity 0.2s"}}>⭐</button>
+        </div>
       </div>
       {expanded&&(
         <div style={{padding:"0 14px 14px",borderTop:"1px solid #111"}}>
           <p style={{fontSize:11,color:"#777",lineHeight:1.7,margin:"12px 0"}}>{aide.desc}</p>
+
+          {/* Deadline enrichie */}
+          {dl&&(
+            <div style={{background:"#080808",border:"1px solid #1A1A1A",borderRadius:7,padding:"10px 12px",marginBottom:12}}>
+              <div style={{fontSize:9,color:"#F03E3E",letterSpacing:2,marginBottom:5}}>📅 DEADLINES</div>
+              <div style={{fontSize:11,color:"#888",marginBottom:2}}>{dl.deadline}</div>
+              <div style={{fontSize:9,color:"#555",letterSpacing:1}}>Rythme : {dl.recurrence}</div>
+            </div>
+          )}
+
+          {/* Checklist dossier */}
+          {checklist.length>0&&(
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:9,color:aide.color,letterSpacing:2,marginBottom:8,display:"flex",justifyContent:"space-between"}}>
+                <span>✓ CHECKLIST DOSSIER</span>
+                <span style={{color:"#555"}}>{done}/{checklist.length}</span>
+              </div>
+              <div style={{background:"#080808",borderRadius:7,padding:"2px 0"}}>
+                {checklist.map((item,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:i<checklist.length-1?"1px solid #0F0F0F":"none"}}>
+                    <div onClick={()=>setChecks(c=>({...c,[i]:!c[i]}))} style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${checks[i]?aide.color:"#2A2A2A"}`,background:checks[i]?`${aide.color}22`:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}>
+                      {checks[i]&&<span style={{fontSize:9,color:aide.color,fontWeight:700}}>✓</span>}
+                    </div>
+                    <span style={{fontSize:11,color:checks[i]?"#3A3A3A":"#888",textDecoration:checks[i]?"line-through":"none",lineHeight:1.4,transition:"color 0.2s"}}>{item}</span>
+                  </div>
+                ))}
+              </div>
+              {done===checklist.length&&<div style={{fontSize:10,color:"#00C9A7",marginTop:8,textAlign:"center"}}>✓ Dossier complet — tu peux postuler !</div>}
+            </div>
+          )}
+
+          {/* Étapes clés */}
           <div style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,marginBottom:8}}>ÉTAPES CLÉS</div>
-          {aide.etapes.map((e,i)=><div key={i} style={{display:"flex",gap:9,padding:"7px 0",borderBottom:i<aide.etapes.length-1?"1px solid #0F0F0F":"none"}}><span style={{width:16,height:16,borderRadius:"50%",background:"#111",color:aide.color,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</span><span style={{fontSize:11,color:"#666"}}>{e}</span></div>)}
+          {aide.etapes.map((e,i)=>(
+            <div key={i} style={{display:"flex",gap:9,padding:"7px 0",borderBottom:i<aide.etapes.length-1?"1px solid #0F0F0F":"none"}}>
+              <span style={{width:16,height:16,borderRadius:"50%",background:"#111",color:aide.color,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</span>
+              <span style={{fontSize:11,color:"#666"}}>{e}</span>
+            </div>
+          ))}
           <a href={aide.lien} target="_blank" rel="noopener noreferrer" className="lnk" style={{marginTop:12,background:"none",border:`1.5px solid ${aide.color}`,color:aide.color}}>Accéder au dossier →</a>
         </div>
       )}
@@ -2483,6 +2708,10 @@ function AideCard({aide,expanded,onToggle}){
   );
 }
 
+// On garde AideCard (legacy) pour compatibilité éventuelle
+function AideCard({aide,expanded,onToggle}){
+  return <AideCardV2 aide={aide} expanded={expanded} onToggle={onToggle} saved={false} onSave={()=>{}}/>;
+}
 
 // ─── ACTUALITÉS ──────────────────────────────────────────────────────────────
 function Actualites({onBack}){
