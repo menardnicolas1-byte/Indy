@@ -646,33 +646,102 @@ function Landing({onEnter, onLogin}){
 }
 
 // ─── ONBOARDING ──────────────────────────────────────────────────────────────
+// ─── ONBOARDING ENRICHI ───────────────────────────────────────────────────────
 function Onboarding({onDone}){
   const [step,setStep]=useState(0);
-  const [name,setName]=useState("");
-  const [genre,setGenre]=useState("");
-  const steps=[
-    {e:"🎵",t:"BIENVENUE\nCHEZ INDY",s:"Le coach de poche de l'artiste indépendant",c:null},
-    {e:"🎤",t:"TON NOM\nD'ARTISTE",s:"Comment tu t'appelles ?",c:<input value={name} onChange={e=>setName(e.target.value)} placeholder="Saya, TiF, Mon Artiste…" style={{fontSize:15,padding:16,textAlign:"center"}}/>},
-    {e:"🎛️",t:"TON GENRE\nMUSICAL",s:"Afro Pop, R&B, Trap FR…",c:<input value={genre} onChange={e=>setGenre(e.target.value)} placeholder="Afro Pop, R&B FR, Drill…" style={{fontSize:15,padding:16,textAlign:"center"}}/>},
-    {e:"🚀",t:"TOUT EST\nPRÊT",s:`Bienvenue ${name||"artiste"} — c'est parti.`,c:null},
+  const [data,setData]=useState({name:"",genre:"",role:"",niveau:"",objectif:"",sortie:""});
+
+  const ROLES=[
+    {v:"artiste",l:"Artiste / Chanteur·se",e:"🎤"},
+    {v:"beatmaker",l:"Beatmaker / Producteur",e:"🎛️"},
+    {v:"groupe",l:"Groupe / Collectif",e:"🎸"},
+    {v:"manager",l:"Manager / Label",e:"👔"},
   ];
+  const NIVEAUX=[
+    {v:"debut",l:"Je commence (0–1 an)",e:"🌱"},
+    {v:"dev",l:"En développement (1–3 ans)",e:"🚀"},
+    {v:"confirme",l:"Confirmé (3+ ans, sorties)",e:"⭐"},
+    {v:"pro",l:"Semi-pro / Pro",e:"🏆"},
+  ];
+  const OBJECTIFS=[
+    {v:"sortie",l:"Préparer ma prochaine sortie",e:"🎵"},
+    {v:"live",l:"Décrocher des dates de concert",e:"🎤"},
+    {v:"financement",l:"Trouver des aides / subventions",e:"💰"},
+    {v:"distribution",l:"Mieux distribuer ma musique",e:"🚀"},
+  ];
+
+  const steps=[
+    {e:"🎵",t:"BIENVENUE\nCHEZ INDY",s:"Le cockpit carrière de l'artiste indépendant",c:null},
+    {e:"🎤",t:"TON NOM\nD'ARTISTE",s:"Comment tu t'appelles ?",c:(
+      <input value={data.name} onChange={e=>setData(d=>({...d,name:e.target.value}))} placeholder="Saya, TiF, Mon Artiste…" style={{fontSize:15,padding:16,textAlign:"center"}}/>
+    )},
+    {e:"🎛️",t:"TON GENRE\nMUSICAL",s:"Afro Pop, R&B, Trap FR…",c:(
+      <input value={data.genre} onChange={e=>setData(d=>({...d,genre:e.target.value}))} placeholder="Afro Pop, R&B FR, Drill…" style={{fontSize:15,padding:16,textAlign:"center"}}/>
+    )},
+    {e:"🏷️",t:"TON RÔLE",s:"Comment tu te positionnes dans la musique ?",c:(
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {ROLES.map(r=>(
+          <button key={r.v} onClick={()=>setData(d=>({...d,role:r.v}))} style={{background:data.role===r.v?"#FF6B3518":"#0D0D0D",border:`1px solid ${data.role===r.v?"#FF6B35":"#1A1A1A"}`,color:data.role===r.v?"#FF6B35":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"12px 15px",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
+            <span style={{fontSize:18}}>{r.e}</span>{r.l}
+          </button>
+        ))}
+      </div>
+    )},
+    {e:"📊",t:"TON NIVEAU",s:"Où en es-tu dans ta carrière ?",c:(
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {NIVEAUX.map(n=>(
+          <button key={n.v} onClick={()=>setData(d=>({...d,niveau:n.v}))} style={{background:data.niveau===n.v?"#845EF718":"#0D0D0D",border:`1px solid ${data.niveau===n.v?"#845EF7":"#1A1A1A"}`,color:data.niveau===n.v?"#845EF7":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"12px 15px",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
+            <span style={{fontSize:18}}>{n.e}</span>{n.l}
+          </button>
+        ))}
+      </div>
+    )},
+    {e:"🎯",t:"TON OBJECTIF",s:"Quelle est ta priorité en ce moment ?",c:(
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {OBJECTIFS.map(o=>(
+          <button key={o.v} onClick={()=>setData(d=>({...d,objectif:o.v}))} style={{background:data.objectif===o.v?"#00C9A718":"#0D0D0D",border:`1px solid ${data.objectif===o.v?"#00C9A7":"#1A1A1A"}`,color:data.objectif===o.v?"#00C9A7":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"12px 15px",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
+            <span style={{fontSize:18}}>{o.e}</span>{o.l}
+          </button>
+        ))}
+      </div>
+    )},
+    {e:"📅",t:"DATE DE\nSORTIE ESTIMÉE",s:"Tu as un projet en cours ? (optionnel)",c:(
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <input type="date" value={data.sortie} onChange={e=>setData(d=>({...d,sortie:e.target.value}))} style={{textAlign:"center",padding:14}}/>
+        <button onClick={()=>setData(d=>({...d,sortie:""}))} style={{background:"none",border:"1px solid #1A1A1A",color:"#555",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:1.5,padding:"10px",borderRadius:6,cursor:"pointer"}}>Pas de date pour l'instant</button>
+      </div>
+    )},
+    {e:"🚀",t:"TOUT EST\nPRÊT",s:`Bienvenue ${data.name||"artiste"} — ton dashboard est personnalisé.`,c:null},
+  ];
+
   const s=steps[step];
-  const ok=step===0||step===3||(step===1&&name.trim())||(step===2&&genre.trim());
+  const ok=(
+    step===0||step===7||
+    (step===1&&data.name.trim())||
+    (step===2&&data.genre.trim())||
+    (step===3&&data.role)||
+    (step===4&&data.niveau)||
+    (step===5&&data.objectif)||
+    step===6
+  );
+
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",display:"flex",flexDirection:"column"}}>
       <div style={{display:"flex",gap:4,padding:"20px 24px 0"}}>
         {steps.map((_,i)=><div key={i} style={{flex:1,height:2,borderRadius:1,background:i<=step?"#FF6B35":"#111",transition:"background 0.3s"}}/>)}
       </div>
-      <div className="fu" style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 28px",gap:24}}>
-        <div style={{fontSize:52}}>{s.e}</div>
-        <div style={{textAlign:"center"}}>
-          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:34,letterSpacing:4,lineHeight:1.1,whiteSpace:"pre-line"}}>{s.t}</div>
-          <div style={{fontSize:12,color:"#555",marginTop:10,lineHeight:1.6}}>{s.s}</div>
+      <div className="fu" style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",padding:"32px 28px 20px",gap:20}}>
+        <div style={{fontSize:48}}>{s.e}</div>
+        <div style={{textAlign:"center",width:"100%"}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:30,letterSpacing:4,lineHeight:1.1,whiteSpace:"pre-line"}}>{s.t}</div>
+          <div style={{fontSize:12,color:"#555",marginTop:8,lineHeight:1.6}}>{s.s}</div>
         </div>
-        {s.c&&<div style={{width:"100%"}}>{s.c}</div>}
+        {s.c&&<div style={{width:"100%",maxWidth:400}}>{s.c}</div>}
       </div>
       <div style={{padding:"0 24px 40px",display:"flex",flexDirection:"column",gap:10}}>
-        <button className="btn" disabled={!ok} onClick={()=>step<steps.length-1?setStep(step+1):onDone({name,genre})}>{step===steps.length-1?"Sois INDY →":"Continuer →"}</button>
+        <button className="btn" disabled={!ok} onClick={()=>step<steps.length-1?setStep(step+1):onDone({name:data.name,genre:data.genre,role:data.role,niveau:data.niveau,objectif:data.objectif,sortie_estimee:data.sortie})}>
+          {step===steps.length-1?"Sois INDY →":"Continuer →"}
+        </button>
         {step>0&&<button className="btn-o" style={{width:"100%"}} onClick={()=>setStep(step-1)}>← Retour</button>}
       </div>
     </div>
@@ -758,7 +827,86 @@ function HowItWorks({empty=false, onGoCoach, plan}){
   );
 }
 
-// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+// ─── DAILY COACH WIDGET — conseil IA personnalisé du jour ────────────────────
+// Génère un conseil ciblé selon le profil, les projets en cours, et l'objectif.
+// Résultat mis en cache localStorage (expire après 24h) pour éviter le spam API.
+function DailyCoachWidget({plan,user,projects,onGoPlan}){
+  const [conseil,setConseil]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [open,setOpen]=useState(false);
+  const CACHE_KEY="indy_daily_coach_v1";
+
+  // Charge le cache au mount
+  useEffect(()=>{
+    try{
+      const raw=localStorage.getItem(CACHE_KEY);
+      if(raw){
+        const {text,date}=JSON.parse(raw);
+        const age=(Date.now()-date)/3600000; // heures
+        if(age<22){setConseil(text);}
+      }
+    }catch{}
+  },[]);
+
+  const gen=async()=>{
+    if(plan==="free"){setOpen(true);return;}
+    setLoading(true);
+    const proj=projects[0];
+    const userCtx=`Artiste : ${user?.name||"artiste"} · Genre : ${user?.genre||"indé"} · Niveau : ${user?.niveau||""} · Objectif : ${user?.objectif||""}.`;
+    const projCtx=proj?`Projet actuel : "${proj.titre}" · Avancement global : ${Math.round(Object.values(proj.progress||{}).reduce((a,b)=>a+b,0)/(Object.keys(proj.progress||{}).length||1))}% · Étape : ${proj.stage||"création"} · Sortie estimée : ${proj.sortie||"non définie"}.`:"Aucun projet créé pour l'instant.";
+    const prompt=`${userCtx}\n${projCtx}\n\nDonne-moi UN conseil concret et actionnable pour aujourd'hui (3-4 phrases max). Commence directement par l'action. Pas d'introduction. Tutoie-moi. Sois précis, motivant, direct.`;
+    try{
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:COACH_SYS,messages:[{role:"user",content:prompt}],maxTokens:300})});
+      const json=await res.json();
+      const text=json.content?.map(b=>b.text||"").join("")||"Continue ton parcours — chaque jour compte.";
+      setConseil(text);
+      try{localStorage.setItem(CACHE_KEY,JSON.stringify({text,date:Date.now()}));}catch{}
+    }catch{setConseil("Continue ton parcours — chaque jour compte.");}
+    setLoading(false);
+  };
+
+  const today=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+
+  return(
+    <div style={{margin:"14px 18px 0",background:"linear-gradient(135deg,#0D0D0D,#0A0A0A)",border:"1px solid #FF6B3522",borderRadius:12,overflow:"hidden",position:"relative"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#FF6B35,#845EF7)"}}/>
+      <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:36,height:36,borderRadius:9,background:"#FF6B3515",border:"1px solid #FF6B3533",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⚡</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:9,color:"#FF6B35",letterSpacing:2,fontWeight:600}}>CONSEIL DU JOUR</div>
+          <div style={{fontSize:10,color:"#555",marginTop:1}}>{today}</div>
+        </div>
+        {!conseil&&!loading&&(
+          <button onClick={gen} style={{background:"#FF6B35",border:"none",color:"#000",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1.5,fontWeight:700,padding:"8px 12px",borderRadius:8,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+            {plan==="free"?"🔒 VOIR":"GÉNÉRER"}
+          </button>
+        )}
+        {conseil&&!loading&&(
+          <button onClick={()=>{setConseil(null);try{localStorage.removeItem(CACHE_KEY);}catch{}}} style={{background:"none",border:"1px solid #1A1A1A",color:"#444",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"6px 10px",borderRadius:6,cursor:"pointer",flexShrink:0}}>↺</button>
+        )}
+      </div>
+      {loading&&(
+        <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:8,borderTop:"1px solid #0F0F0F"}}>
+          <Equalizer color="#FF6B35" bars={3} height={11}/>
+          <span style={{fontSize:11,color:"#888"}}>Le coach réfléchit…</span>
+        </div>
+      )}
+      {conseil&&!loading&&(
+        <div className="fu" style={{padding:"0 16px 14px",borderTop:"1px solid #0F0F0F"}}>
+          <div style={{fontSize:12,color:"#CCC",lineHeight:1.7,marginTop:10,whiteSpace:"pre-wrap"}}>{conseil}</div>
+        </div>
+      )}
+      {open&&(
+        <div style={{padding:"0 16px 14px",borderTop:"1px solid #0F0F0F"}}>
+          <div style={{fontSize:11,color:"#555",lineHeight:1.6,marginTop:10}}>🔒 Le conseil du jour est réservé aux abonnés.</div>
+          <button className="btn" style={{marginTop:10,background:"#FF6B35",color:"#000"}} onClick={onGoPlan}>S'abonner — 9,90€/mois →</button>
+          <button onClick={()=>setOpen(false)} style={{background:"none",border:"none",color:"#444",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1,padding:"8px 0 0",cursor:"pointer",display:"block"}}>Fermer</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user}){
   const [edit,setEdit]=useState(null);
   const [isNew,setIsNew]=useState(false);
@@ -783,7 +931,7 @@ function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user}){
       {/* ── MODULE VISUEL : Comment INDY t'accompagne ───────────────────────── */}
       {/* Affiché toujours, mais en mode "découverte" élargi quand 0 projet */}
       <HowItWorks empty={projects.length===0} onGoCoach={onGoCoach} plan={plan}/>
-      {projects.length>0&&(
+      <DailyCoachWidget plan={plan} user={user} projects={projects} onGoPlan={onGoPlan}/>
         <div style={{padding:"12px 18px 0"}}>
           <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:8}}>◆ AVANCEMENT PAR ÉTAPE</div>
           <div style={{display:"flex",flexDirection:"column",gap:5}}>
@@ -870,6 +1018,588 @@ function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user}){
               {!isNew&&<button className="btn-o" style={{width:"100%",color:"#F03E3E44",borderColor:"#F03E3E22"}} onClick={()=>{if(window.confirm("Supprimer ce titre ?"))del(edit.id);}}>Supprimer</button>}
               <button className="btn-o" style={{width:"100%"}} onClick={()=>setEdit(null)}>Annuler</button>
             </div>
+          </div>
+        </div></div>
+      )}
+    </div>
+  );
+}
+
+// ─── STREAMING TRACKER ───────────────────────────────────────────────────────
+// Saisie manuelle des stats. Stocké dans localStorage. Graphe d'évolution.
+// Momentum score calculé selon la tendance sur les 3 dernières saisies.
+function StreamingTracker({plan,onGoPlan,onBack}){
+  const STORE_KEY="indy_streaming_v1";
+  const [entries,setEntries]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem(STORE_KEY)||"[]");}
+    catch{return [];}
+  });
+  const [form,setForm]=useState({date:new Date().toISOString().slice(0,10),listeners:"",streams:"",ig:"",tiktok:""});
+  const [showForm,setShowForm]=useState(false);
+  const [activeMetric,setActiveMetric]=useState("listeners");
+
+  useEffect(()=>{
+    try{localStorage.setItem(STORE_KEY,JSON.stringify(entries));}catch{}
+  },[entries]);
+
+  const save=()=>{
+    if(!form.listeners&&!form.streams)return;
+    const entry={...form,id:Date.now(),listeners:Number(form.listeners)||0,streams:Number(form.streams)||0,ig:Number(form.ig)||0,tiktok:Number(form.tiktok)||0};
+    const updated=[...entries,entry].sort((a,b)=>new Date(a.date)-new Date(b.date));
+    setEntries(updated);
+    setForm({date:new Date().toISOString().slice(0,10),listeners:"",streams:"",ig:"",tiktok:""});
+    setShowForm(false);
+  };
+
+  // Momentum score: compare dernière vs avant-dernière valeur de la métrique active
+  const getMomentum=()=>{
+    if(entries.length<2)return null;
+    const last=entries[entries.length-1][activeMetric];
+    const prev=entries[entries.length-2][activeMetric];
+    if(!prev)return null;
+    return Math.round(((last-prev)/prev)*100);
+  };
+  const momentum=getMomentum();
+
+  // Générer insight IA (premium uniquement)
+  const [insight,setInsight]=useState(null);
+  const [insightLoad,setInsightLoad]=useState(false);
+  const genInsight=async()=>{
+    if(plan==="free")return;
+    setInsightLoad(true);
+    const recent=entries.slice(-5);
+    const dataStr=recent.map(e=>`${e.date}: ${e.listeners} auditeurs, ${e.streams} streams, ${e.ig} followers IG, ${e.tiktok} followers TikTok`).join("\n");
+    try{
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:COACH_SYS,messages:[{role:"user",content:`Voici mes stats de streaming/réseaux sur les dernières semaines :\n${dataStr}\n\nDonne-moi 2 insights concrets et actionnables sur mes tendances. 3 phrases max, direct, tutoie-moi.`}],maxTokens:250})});
+      const json=await res.json();
+      setInsight(json.content?.map(b=>b.text||"").join("")||"");
+    }catch{setInsight("Erreur de connexion.");}
+    setInsightLoad(false);
+  };
+
+  const METRICS=[
+    {k:"listeners",l:"Auditeurs",c:"#1DB954",u:""},
+    {k:"streams",l:"Streams",c:"#845EF7",u:""},
+    {k:"ig",l:"Followers IG",c:"#F783AC",u:""},
+    {k:"tiktok",l:"TikTok",c:"#74C0FC",u:""},
+  ];
+
+  // Données graphe simple (barres ASCII-style en CSS)
+  const graphData=entries.slice(-10).map(e=>({date:e.date.slice(5),val:e[activeMetric]||0}));
+  const maxVal=Math.max(...graphData.map(e=>e.val),1);
+  const curMetric=METRICS.find(m=>m.k===activeMetric);
+
+  if(plan==="free")return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
+      <Hdr sub="STREAMING TRACKER" accent="#1DB954" onBack={onBack}/>
+      <div style={{padding:"30px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+        <div style={{fontSize:48}}>📊</div>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:3}}>SUIVI DE PERFORMANCE</div>
+        <div style={{fontSize:12,color:"#555",lineHeight:1.7,maxWidth:280}}>Suis tes streams, auditeurs, followers Instagram et TikTok. Visualise ta progression, ton momentum et reçois des insights IA.</div>
+        <div style={{background:"#0D0D0D",border:"1px solid #1A1A1A",borderRadius:10,padding:"14px 16px",width:"100%",maxWidth:320}}>
+          {[["📈 Graphe d'évolution","#1DB954"],["⚡ Momentum score","#845EF7"],["🤖 Insights IA personnalisés","#FF6B35"],["💾 Historique illimité","#FFD43B"]].map(([f,c])=>(
+            <div key={f} style={{display:"flex",gap:8,fontSize:11,color:"#666",padding:"5px 0",alignItems:"center"}}><span style={{color:c}}>✓</span>{f}</div>
+          ))}
+        </div>
+        <button className="btn" style={{maxWidth:300,width:"100%"}} onClick={onGoPlan}>Débloquer — 9,90€/mois →</button>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
+      <Hdr sub="STREAMING TRACKER" accent="#1DB954" onBack={onBack}/>
+
+      {/* Sélecteur de métrique */}
+      <div style={{display:"flex",gap:0,borderBottom:"1px solid #111"}}>
+        {METRICS.map(m=>(
+          <button key={m.k} onClick={()=>setActiveMetric(m.k)} style={{flex:1,background:activeMetric===m.k?`${m.c}12`:"none",border:"none",borderBottom:`2px solid ${activeMetric===m.k?m.c:"transparent"}`,color:activeMetric===m.k?m.c:"#555",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"11px 4px",cursor:"pointer",textTransform:"uppercase",transition:"all 0.2s"}}>{m.l}</button>
+        ))}
+      </div>
+
+      {/* Stats résumé */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderBottom:"1px solid #111"}}>
+        <div style={{padding:"14px 0",textAlign:"center",borderRight:"1px solid #111"}}>
+          <div style={{fontSize:26,fontFamily:"'Bebas Neue',sans-serif",color:curMetric?.c}}>
+            {entries.length>0?(entries[entries.length-1][activeMetric]||0).toLocaleString("fr-FR"):"—"}
+          </div>
+          <div style={{fontSize:9,color:"#555",letterSpacing:1}}>DERNIÈRE SAISIE</div>
+        </div>
+        <div style={{padding:"14px 0",textAlign:"center"}}>
+          <div style={{fontSize:26,fontFamily:"'Bebas Neue',sans-serif",color:momentum===null?"#555":momentum>=0?"#00C9A7":"#F03E3E"}}>
+            {momentum===null?"—":`${momentum>=0?"+":""}${momentum}%`}
+          </div>
+          <div style={{fontSize:9,color:"#555",letterSpacing:1}}>MOMENTUM</div>
+        </div>
+      </div>
+
+      {/* Graphe */}
+      {entries.length>0?(
+        <div style={{padding:"16px 18px"}}>
+          <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:12}}>◆ ÉVOLUTION — {curMetric?.l.toUpperCase()}</div>
+          <div style={{display:"flex",alignItems:"flex-end",gap:4,height:80,overflowX:"auto",scrollbarWidth:"none"}}>
+            {graphData.map((d,i)=>(
+              <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,flexShrink:0,minWidth:28}}>
+                <div style={{width:"100%",background:`${curMetric?.c}33`,borderRadius:"3px 3px 0 0",height:Math.max(4,Math.round((d.val/maxVal)*70)),transition:"height 0.4s"}}/>
+                <div style={{width:"100%",height:3,background:curMetric?.c,borderRadius:1}}/>
+                <div style={{fontSize:7,color:"#444",whiteSpace:"nowrap"}}>{d.date}</div>
+              </div>
+            ))}
+          </div>
+          {/* Insight IA */}
+          {!insight&&!insightLoad&&(
+            <button onClick={genInsight} style={{marginTop:12,width:"100%",background:"#0D0D0D",border:"1px solid #845EF733",color:"#845EF7",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",borderRadius:8,cursor:"pointer"}}>🤖 Analyser avec l'IA →</button>
+          )}
+          {insightLoad&&<div style={{marginTop:12,display:"flex",alignItems:"center",gap:8,fontSize:11,color:"#888"}}><Equalizer color="#845EF7" bars={3} height={10}/>Analyse en cours…</div>}
+          {insight&&(
+            <div className="fu" style={{marginTop:12,background:"#0D0D0D",border:"1px solid #845EF733",borderRadius:8,padding:"12px 14px"}}>
+              <div style={{fontSize:9,color:"#845EF7",letterSpacing:2,marginBottom:6}}>🤖 INSIGHT IA</div>
+              <div style={{fontSize:11,color:"#CCC",lineHeight:1.7}}>{insight}</div>
+              <button onClick={()=>setInsight(null)} style={{background:"none",border:"none",color:"#444",fontSize:10,letterSpacing:1,padding:"8px 0 0",cursor:"pointer"}}>Fermer</button>
+            </div>
+          )}
+        </div>
+      ):(
+        <div style={{padding:"40px 24px",textAlign:"center"}}>
+          <div style={{fontSize:40}}>📊</div>
+          <div style={{fontSize:14,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,marginTop:12,marginBottom:8}}>AUCUNE DONNÉE</div>
+          <div style={{fontSize:11,color:"#555",lineHeight:1.6}}>Ajoute ta première saisie pour commencer à suivre ta progression.</div>
+        </div>
+      )}
+
+      {/* Historique */}
+      {entries.length>0&&(
+        <div style={{padding:"0 18px 16px"}}>
+          <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:10}}>◆ HISTORIQUE</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {entries.slice(-8).reverse().map((e,i)=>(
+              <div key={e.id} className="fu" style={{background:"#0D0D0D",border:"1px solid #141414",borderRadius:8,padding:"10px 14px",animationDelay:`${i*0.04}s`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                  <span style={{fontSize:10,color:"#555"}}>{new Date(e.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}</span>
+                  <button onClick={()=>setEntries(prev=>prev.filter(x=>x.id!==e.id))} style={{background:"none",border:"none",color:"#2A2A2A",cursor:"pointer",fontSize:11,padding:0}}>✕</button>
+                </div>
+                <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+                  {METRICS.map(m=>e[m.k]>0&&(
+                    <div key={m.k} style={{display:"flex",gap:4,alignItems:"center"}}>
+                      <span style={{fontSize:9,color:m.c,letterSpacing:1}}>{m.l.slice(0,4).toUpperCase()}</span>
+                      <span style={{fontSize:12,color:"#AAA",fontWeight:600}}>{e[m.k].toLocaleString("fr-FR")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Formulaire ajout */}
+      {showForm?(
+        <div className="panel"><div className="pin" style={{borderTopColor:"#1DB954"}}>
+          <div style={{padding:"16px 20px",borderBottom:"1px solid #111",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:9,color:"#1DB954",letterSpacing:2}}>NOUVELLE SAISIE</div>
+            <button onClick={()=>setShowForm(false)} style={{background:"none",border:"none",color:"#999",fontSize:20,cursor:"pointer"}}>✕</button>
+          </div>
+          <div style={{padding:"18px 20px 40px",display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',sans-serif"}}>
+            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>DATE</label><input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div><label style={{fontSize:11,color:"#1DB954",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>AUDITEURS MENSUELS</label><input type="number" value={form.listeners} onChange={e=>setForm(f=>({...f,listeners:e.target.value}))} placeholder="50000"/></div>
+              <div><label style={{fontSize:11,color:"#845EF7",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>STREAMS TITRE</label><input type="number" value={form.streams} onChange={e=>setForm(f=>({...f,streams:e.target.value}))} placeholder="12000"/></div>
+              <div><label style={{fontSize:11,color:"#F783AC",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>FOLLOWERS IG</label><input type="number" value={form.ig} onChange={e=>setForm(f=>({...f,ig:e.target.value}))} placeholder="3500"/></div>
+              <div><label style={{fontSize:11,color:"#74C0FC",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>FOLLOWERS TIKTOK</label><input type="number" value={form.tiktok} onChange={e=>setForm(f=>({...f,tiktok:e.target.value}))} placeholder="8000"/></div>
+            </div>
+            <button className="btn" style={{background:"#1DB954",color:"#000",marginTop:8}} disabled={!form.listeners&&!form.streams} onClick={save}>Enregistrer →</button>
+          </div>
+        </div></div>
+      ):(
+        <div style={{padding:"0 18px 20px"}}>
+          <button onClick={()=>setShowForm(true)} style={{width:"100%",background:"#0D0D0D",border:"1px dashed #1DB95433",color:"#1DB954",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:2,padding:14,borderRadius:10,cursor:"pointer"}}>+ AJOUTER UNE SAISIE</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── RELEASE PLAN GENERATOR ──────────────────────────────────────────────────
+// Timeline dynamique J-30 → J+7 depuis une date de sortie.
+// Génère un plan personnalisé avec genre + contexte artiste.
+function ReleasePlan({plan,user,projects,onGoPlan,onBack}){
+  const [phase,setPhase]=useState("form"); // form | loading | result
+  const [form,setForm]=useState({titre:"",genre:user?.genre||"",sortie:"",plateforme:"Spotify, Apple Music, Deezer"});
+  const [planData,setPlanData]=useState(null);
+
+  // Pré-remplir depuis le premier projet
+  useEffect(()=>{
+    if(projects.length>0&&!form.titre){
+      const p=projects[0];
+      setForm(f=>({...f,titre:p.titre||"",genre:p.genre||user?.genre||""}));
+    }
+  },[]);
+
+  const TIMELINE_DEFAULT=[
+    {j:-30,label:"J-30",icon:"🎨",cat:"Identité",action:"Finaliser l'identité visuelle : artwork, palette couleurs, direction artistique"},
+    {j:-21,label:"J-21",icon:"📱",cat:"Teaser",action:"Publier le premier teaser (30 sec extrait ou making-of)"},
+    {j:-14,label:"J-14",icon:"🎧",cat:"Pitch",action:"Envoyer le pitch éditorial Spotify (obligatoire 7 sem à l'avance)"},
+    {j:-10,label:"J-10",icon:"🔗",cat:"Pre-save",action:"Créer et lancer le pre-save (Hypeddit, SubmitHub, Toneden)"},
+    {j:-7,label:"J-7",icon:"🎬",cat:"Contenu",action:"Publier backstage + vidéo courte sur TikTok/Reels"},
+    {j:-3,label:"J-3",icon:"📣",cat:"Rappel",action:"Story compte à rebours + republication du teaser"},
+    {j:0,label:"Jour J",icon:"🚀",cat:"Sortie",action:"SORTIE — post sortie sur tous les réseaux + stories + notification communauté"},
+    {j:3,label:"J+3",icon:"📊",cat:"Relance",action:"Partager les premières stats + relancer avec contenu réaction"},
+    {j:7,label:"J+7",icon:"🎁",cat:"Bonus",action:"Contenu bonus exclusif : lyric video, derrière le micro, remix ou instrumental"},
+  ];
+
+  const gen=async()=>{
+    if(plan==="free"){setPhase("locked");return;}
+    if(!form.sortie||!form.titre){return;}
+    setPhase("loading");
+    const prompt=`Crée un plan de sortie personnalisé pour :\n- Titre : "${form.titre}"\n- Genre : ${form.genre}\n- Artiste : ${user?.name||"artiste indépendant"}\n- Date de sortie : ${form.sortie}\n- Plateformes : ${form.plateforme}\n\nGénère un plan de 9 étapes de J-30 à J+7 au format JSON, sans markdown ni backticks.\nFormat exact : [{"j":-30,"label":"J-30","icon":"🎨","cat":"Catégorie","action":"Action concrète spécifique à ce genre musical"},...].\nRends chaque action très concrète, spécifique au genre ${form.genre}, et actionnables aujourd'hui. Inclus des exemples de contenu précis.`;
+    try{
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:"Tu es expert marketing musical pour artistes indépendants français. Réponds UNIQUEMENT en JSON valide, sans texte autour.",messages:[{role:"user",content:prompt}],maxTokens:1500})});
+      const json=await res.json();
+      const text=json.content?.map(b=>b.type==="text"?b.text:"").join("")||"[]";
+      const clean=text.replace(/```json|```/g,"").trim();
+      try{
+        const parsed=JSON.parse(clean);
+        setPlanData(parsed.length?parsed:TIMELINE_DEFAULT);
+      }catch{setPlanData(TIMELINE_DEFAULT);}
+    }catch{setPlanData(TIMELINE_DEFAULT);}
+    setPhase("result");
+  };
+
+  const getSortieDate=()=>form.sortie?new Date(form.sortie):null;
+  const getJDate=(j)=>{
+    const d=getSortieDate();
+    if(!d)return "";
+    const r=new Date(d);r.setDate(r.getDate()+j);
+    return r.toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+  };
+
+  const [checks,setChecks]=useState({});
+
+  if(phase==="locked")return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
+      <Hdr sub="RELEASE PLAN" accent="#FFD43B" onBack={onBack}/>
+      <div style={{padding:"30px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+        <div style={{fontSize:48}}>🔒</div>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:3}}>RÉSERVÉ AUX ABONNÉS</div>
+        <div style={{fontSize:12,color:"#555",lineHeight:1.7,maxWidth:280}}>Génère une timeline complète J-30 → J+7 personnalisée pour ton genre et ton artiste.</div>
+        <button className="btn" style={{maxWidth:300,width:"100%",background:"#FFD43B",color:"#000"}} onClick={onGoPlan}>S'abonner — 9,90€/mois →</button>
+        <button className="btn-o" style={{maxWidth:300,width:"100%"}} onClick={()=>setPhase("form")}>← Retour</button>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
+      <Hdr sub="RELEASE PLAN" accent="#FFD43B" onBack={phase==="result"?()=>setPhase("form"):onBack} right={phase==="result"&&<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>{setPhase("form");setPlanData(null);setChecks({});}}>↺ Nouveau</button>}/>
+
+      {phase==="form"&&(
+        <div style={{padding:"18px 18px 40px",display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',sans-serif"}}>
+          <div style={{background:"#0D0D0D",border:"1px solid #FFD43B22",borderRadius:10,padding:"13px 16px",display:"flex",gap:10,alignItems:"flex-start"}}>
+            <span style={{fontSize:20}}>📅</span>
+            <div><div style={{fontSize:11,color:"#FFD43B",fontWeight:600,marginBottom:2}}>Release Plan personnalisé</div><div style={{fontSize:11,color:"#666",lineHeight:1.5}}>Une timeline J-30 → J+7 générée par IA selon ton genre et ta date de sortie.</div></div>
+          </div>
+
+          {projects.length>0&&(
+            <div>
+              <div style={{fontSize:9,color:"#888",letterSpacing:2,marginBottom:8}}>CHOISIR UN TITRE</div>
+              <div style={{display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none"}}>
+                {projects.map(p=>(
+                  <button key={p.id} onClick={()=>setForm(f=>({...f,titre:p.titre,genre:p.genre,sortie:p.sortie||""}))} style={{background:`${p.color}12`,border:`1px solid ${p.color}33`,color:"#888",fontFamily:"'Inter',sans-serif",fontSize:10,padding:"5px 11px",borderRadius:20,cursor:"pointer",flexShrink:0}}>🎵 {p.titre}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>TITRE *</label><input value={form.titre} onChange={e=>setForm(f=>({...f,titre:e.target.value}))} placeholder="Nom de ton titre…"/></div>
+          <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>GENRE *</label><input value={form.genre} onChange={e=>setForm(f=>({...f,genre:e.target.value}))} placeholder="Afro Pop, R&B, Drill…"/></div>
+          <div><label style={{fontSize:11,color:"#FFD43B",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>DATE DE SORTIE *</label><input type="date" value={form.sortie} onChange={e=>setForm(f=>({...f,sortie:e.target.value}))}/></div>
+          <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>PLATEFORMES</label><input value={form.plateforme} onChange={e=>setForm(f=>({...f,plateforme:e.target.value}))} placeholder="Spotify, Apple Music…"/></div>
+
+          <button onClick={plan==="free"?()=>setPhase("locked"):gen} disabled={(!form.titre||!form.genre||!form.sortie)&&plan!=="free"} style={{background:plan==="free"?"#1A1A1A":"linear-gradient(135deg,#FFD43B,#FFC300)",border:plan==="free"?"1px solid #FFD43B33":"none",color:plan==="free"?"#FFD43B":"#000",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:2,textTransform:"uppercase",padding:"13px 20px",borderRadius:8,cursor:"pointer",fontWeight:600,width:"100%",marginTop:6}}>
+            {plan==="free"?"🔒 Réservé aux abonnés":"✦ Générer mon Release Plan →"}
+          </button>
+        </div>
+      )}
+
+      {phase==="loading"&&(
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",gap:16}}>
+          <div style={{fontSize:32}}>📅</div>
+          <div style={{fontSize:13,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:3,color:"#FFD43B"}}>GÉNÉRATION EN COURS</div>
+          <div style={{fontSize:11,color:"#555",textAlign:"center",padding:"0 40px",lineHeight:1.6}}>L'IA construit ton plan personnalisé…</div>
+          <div style={{display:"flex",gap:7}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#FFD43B",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div>
+        </div>
+      )}
+
+      {phase==="result"&&planData&&(
+        <div style={{padding:"14px 18px 20px"}}>
+          <div style={{background:"#0D0D0D",border:"1px solid #FFD43B22",borderRadius:8,padding:"11px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:20}}>🎵</span>
+            <div><div style={{fontSize:11,color:"#FFD43B",fontWeight:600}}>{form.titre}</div><div style={{fontSize:10,color:"#555"}}>Sortie : {new Date(form.sortie).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div></div>
+            <div style={{marginLeft:"auto",fontSize:11,color:"#555"}}>{Object.values(checks).filter(Boolean).length}/{planData.length}</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {planData.map((item,i)=>{
+              const done=!!checks[i];
+              const isToday=item.j===0;
+              return(
+                <div key={i} className="fu" style={{background:isToday?"#140F00":"#0D0D0D",border:`1px solid ${isToday?"#FFD43B44":done?"#00C9A722":"#141414"}`,borderRadius:10,padding:"12px 14px",animationDelay:`${i*0.04}s`,position:"relative",overflow:"hidden"}}>
+                  {isToday&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"#FFD43B"}}/>}
+                  <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                    <div onClick={()=>setChecks(c=>({...c,[i]:!c[i]}))} style={{width:20,height:20,borderRadius:5,border:`1.5px solid ${done?"#00C9A7":"#2A2A2A"}`,background:done?"#00C9A722":"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,transition:"all 0.2s"}}>{done&&<span style={{fontSize:11,color:"#00C9A7",fontWeight:700}}>✓</span>}</div>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                        <span style={{fontSize:14}}>{item.icon}</span>
+                        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:13,letterSpacing:2,color:isToday?"#FFD43B":done?"#444":"#F0EDE8"}}>{item.label}</span>
+                        <span style={{fontSize:9,color:isToday?"#FFD43B":"#555",letterSpacing:1}}>{getJDate(item.j)}</span>
+                        {isToday&&<span style={{fontSize:8,color:"#000",background:"#FFD43B",padding:"1px 6px",borderRadius:4,fontWeight:700,letterSpacing:1}}>AUJOURD'HUI</span>}
+                      </div>
+                      <div style={{fontSize:9,color:"#555",letterSpacing:1,marginBottom:4}}>{item.cat?.toUpperCase()}</div>
+                      <div style={{fontSize:11,color:done?"#3A3A3A":"#AAA",lineHeight:1.6,textDecoration:done?"line-through":"none"}}>{item.action}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button className="btn-o" style={{width:"100%",marginTop:16}} onClick={()=>{
+            const txt=planData.map(item=>`${item.label} (${getJDate(item.j)}) — ${item.cat}\n${item.action}`).join("\n\n");
+            navigator.clipboard.writeText(txt);
+          }}>Copier le plan →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── CAMPAIGN CALENDAR ───────────────────────────────────────────────────────
+// Calendrier de campagne promo. Vue mois/semaine. Statuts : à faire / planifié / publié.
+// Stocké en localStorage. Premium : édition complète. Free : lecture seule.
+function CampaignCalendar({plan,onGoPlan,onBack}){
+  const STORE_KEY="indy_calendar_v1";
+  const [events,setEvents]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem(STORE_KEY)||"[]");}
+    catch{return [];}
+  });
+  const [view,setView]=useState("week"); // week | month
+  const [currentDate,setCurrentDate]=useState(new Date());
+  const [showForm,setShowForm]=useState(false);
+  const [editEvent,setEditEvent]=useState(null);
+  const [form,setForm]=useState({date:"",type:"post",titre:"",statut:"todo",color:"#FF6B35"});
+
+  useEffect(()=>{
+    try{localStorage.setItem(STORE_KEY,JSON.stringify(events));}catch{}
+  },[events]);
+
+  const TYPES=[
+    {v:"post",l:"Post",e:"📸",c:"#FF6B35"},
+    {v:"reel",l:"Reel / TikTok",e:"🎬",c:"#F783AC"},
+    {v:"story",l:"Story",e:"⭕",c:"#845EF7"},
+    {v:"live",l:"Live",e:"🔴",c:"#F03E3E"},
+    {v:"email",l:"Newsletter",e:"📩",c:"#74C0FC"},
+    {v:"release",l:"Sortie",e:"🚀",c:"#FFD43B"},
+  ];
+  const STATUTS=[
+    {v:"todo",l:"À faire",c:"#555"},
+    {v:"scheduled",l:"Planifié",c:"#845EF7"},
+    {v:"published",l:"Publié",c:"#00C9A7"},
+  ];
+
+  const saveEvent=()=>{
+    if(!form.date||!form.titre)return;
+    const typ=TYPES.find(t=>t.v===form.type);
+    const ev={...form,id:editEvent?.id||Date.now(),color:typ?.c||"#FF6B35"};
+    if(editEvent){
+      setEvents(prev=>prev.map(e=>e.id===editEvent.id?ev:e));
+    }else{
+      setEvents(prev=>[...prev,ev].sort((a,b)=>new Date(a.date)-new Date(b.date)));
+    }
+    setShowForm(false);setEditEvent(null);
+    setForm({date:"",type:"post",titre:"",statut:"todo",color:"#FF6B35"});
+  };
+
+  const delEvent=(id)=>{setEvents(prev=>prev.filter(e=>e.id!==id));setShowForm(false);setEditEvent(null);};
+  const cycleStatut=(id)=>{
+    const order=["todo","scheduled","published"];
+    setEvents(prev=>prev.map(e=>{if(e.id!==id)return e;const i=order.indexOf(e.statut);return{...e,statut:order[(i+1)%3]};
+    }));
+  };
+
+  // Calcul des jours de la semaine courante
+  const getWeekDays=()=>{
+    const start=new Date(currentDate);
+    start.setDate(start.getDate()-start.getDay()+1); // lundi
+    return Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(d.getDate()+i);return d;});
+  };
+
+  // Calcul du mois courant
+  const getMonthDays=()=>{
+    const year=currentDate.getFullYear();const month=currentDate.getMonth();
+    const first=new Date(year,month,1);const last=new Date(year,month+1,0);
+    const startDay=first.getDay()||7; // lundi=1
+    const days=[];
+    for(let i=1;i<startDay;i++)days.push(null);
+    for(let d=1;d<=last.getDate();d++)days.push(new Date(year,month,d));
+    return days;
+  };
+
+  const getEventsForDate=(date)=>{
+    const ds=date.toISOString().slice(0,10);
+    return events.filter(e=>e.date===ds);
+  };
+
+  const navigate=(dir)=>{
+    const d=new Date(currentDate);
+    if(view==="week")d.setDate(d.getDate()+dir*7);
+    else d.setMonth(d.getMonth()+dir);
+    setCurrentDate(d);
+  };
+
+  const isToday=(date)=>date.toISOString().slice(0,10)===new Date().toISOString().slice(0,10);
+
+  const weekDays=getWeekDays();
+  const monthDays=getMonthDays();
+  const JOURS=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+  const MOIS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+  if(plan==="free")return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
+      <Hdr sub="CALENDRIER PROMO" accent="#74C0FC" onBack={onBack}/>
+      <div style={{padding:"30px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+        <div style={{fontSize:48}}>📅</div>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:3}}>CALENDRIER DE CAMPAGNE</div>
+        <div style={{fontSize:12,color:"#555",lineHeight:1.7,maxWidth:280}}>Planifie posts, reels, stories, lives et sorties. Vue semaine ou mois. Statuts, couleurs et rappels.</div>
+        <div style={{background:"#0D0D0D",border:"1px solid #1A1A1A",borderRadius:10,padding:"14px 16px",width:"100%",maxWidth:320}}>
+          {[["📸 Posts, Reels, Stories, Lives","#FF6B35"],["🎬 Vue semaine et mois","#845EF7"],["✅ Statuts à faire / planifié / publié","#00C9A7"],["🔗 Connexion à ton Release Plan","#FFD43B"]].map(([f,c])=>(
+            <div key={f} style={{display:"flex",gap:8,fontSize:11,color:"#666",padding:"5px 0",alignItems:"center"}}><span style={{color:c}}>✓</span>{f}</div>
+          ))}
+        </div>
+        <button className="btn" style={{maxWidth:300,width:"100%"}} onClick={onGoPlan}>Débloquer — 9,90€/mois →</button>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
+      <Hdr sub="CALENDRIER PROMO" accent="#74C0FC" onBack={onBack}
+        right={<button onClick={()=>{setEditEvent(null);setForm({date:new Date().toISOString().slice(0,10),type:"post",titre:"",statut:"todo",color:"#FF6B35"});setShowForm(true);}} style={{background:"#74C0FC",border:"none",color:"#000",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:1.5,fontWeight:700,padding:"7px 12px",borderRadius:8,cursor:"pointer"}}>+ AJOUTER</button>}
+      />
+
+      {/* Toggle vue */}
+      <div style={{display:"flex",gap:0,borderBottom:"1px solid #111"}}>
+        <button onClick={()=>setView("week")} style={{flex:1,background:view==="week"?"#74C0FC12":"none",border:"none",borderBottom:`2px solid ${view==="week"?"#74C0FC":"transparent"}`,color:view==="week"?"#74C0FC":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>Semaine</button>
+        <button onClick={()=>setView("month")} style={{flex:1,background:view==="month"?"#74C0FC12":"none",border:"none",borderBottom:`2px solid ${view==="month"?"#74C0FC":"transparent"}`,color:view==="month"?"#74C0FC":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>Mois</button>
+      </div>
+
+      {/* Navigation */}
+      <div style={{padding:"10px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <button onClick={()=>navigate(-1)} style={{background:"none",border:"none",color:"#555",fontSize:20,cursor:"pointer",padding:"4px 8px"}}>←</button>
+        <div style={{fontSize:12,color:"#CCC",fontWeight:600,letterSpacing:1}}>
+          {view==="week"?`${weekDays[0].toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} — ${weekDays[6].toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}`:`${MOIS[currentDate.getMonth()]} ${currentDate.getFullYear()}`}
+        </div>
+        <button onClick={()=>navigate(1)} style={{background:"none",border:"none",color:"#555",fontSize:20,cursor:"pointer",padding:"4px 8px"}}>→</button>
+      </div>
+
+      {/* Vue semaine */}
+      {view==="week"&&(
+        <div style={{padding:"0 10px 20px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+            {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:9,color:"#555",letterSpacing:1,padding:"4px 0"}}>{j}</div>)}
+            {weekDays.map((date,i)=>{
+              const evs=getEventsForDate(date);
+              const today=isToday(date);
+              return(
+                <div key={i} style={{minHeight:90,background:today?"#0D0D0D":"#080808",border:`1px solid ${today?"#74C0FC33":"#111"}`,borderRadius:8,padding:"5px 4px",display:"flex",flexDirection:"column",gap:3}}>
+                  <div style={{textAlign:"center",fontSize:11,fontWeight:today?700:400,color:today?"#74C0FC":"#555"}}>{date.getDate()}</div>
+                  {evs.map(e=>{
+                    const stat=STATUTS.find(s=>s.v===e.statut);
+                    return(
+                      <div key={e.id} onClick={()=>{setEditEvent(e);setForm({...e});setShowForm(true);}} style={{background:`${e.color}22`,border:`1px solid ${e.color}44`,borderRadius:4,padding:"2px 4px",cursor:"pointer"}}>
+                        <div style={{fontSize:9,color:e.color,fontWeight:600,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.titre}</div>
+                        <div style={{width:"100%",height:2,borderRadius:1,background:stat?.c||"#555",marginTop:2}}/>
+                      </div>
+                    );
+                  })}
+                  <button onClick={()=>{setEditEvent(null);setForm({date:date.toISOString().slice(0,10),type:"post",titre:"",statut:"todo",color:"#FF6B35"});setShowForm(true);}} style={{background:"none",border:"none",color:"#222",fontSize:14,cursor:"pointer",padding:0,lineHeight:1,marginTop:"auto"}}>+</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Vue mois */}
+      {view==="month"&&(
+        <div style={{padding:"0 10px 20px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+            {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:8,color:"#444",letterSpacing:0.5,padding:"4px 0"}}>{j}</div>)}
+            {monthDays.map((date,i)=>{
+              if(!date)return<div key={`empty-${i}`}/>;
+              const evs=getEventsForDate(date);
+              const today=isToday(date);
+              return(
+                <div key={i} onClick={()=>{setEditEvent(null);setForm({date:date.toISOString().slice(0,10),type:"post",titre:"",statut:"todo",color:"#FF6B35"});setShowForm(true);}} style={{minHeight:52,background:today?"#0D0D0D":"transparent",border:`1px solid ${today?"#74C0FC22":"#0F0F0F"}`,borderRadius:6,padding:"3px",cursor:"pointer",display:"flex",flexDirection:"column",gap:2}}>
+                  <div style={{textAlign:"center",fontSize:10,color:today?"#74C0FC":"#555",fontWeight:today?700:400}}>{date.getDate()}</div>
+                  {evs.slice(0,2).map(e=>(
+                    <div key={e.id} onClick={ev=>{ev.stopPropagation();setEditEvent(e);setForm({...e});setShowForm(true);}} style={{background:`${e.color}33`,borderRadius:3,padding:"1px 3px",overflow:"hidden"}}>
+                      <div style={{fontSize:8,color:e.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.titre}</div>
+                    </div>
+                  ))}
+                  {evs.length>2&&<div style={{fontSize:7,color:"#555",textAlign:"center"}}>+{evs.length-2}</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Légende statuts */}
+      <div style={{padding:"0 18px 8px",display:"flex",gap:12,overflowX:"auto",scrollbarWidth:"none"}}>
+        {STATUTS.map(s=><div key={s.v} style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}><div style={{width:8,height:8,borderRadius:"50%",background:s.c}}/><span style={{fontSize:9,color:"#555",letterSpacing:1}}>{s.l.toUpperCase()}</span></div>)}
+      </div>
+
+      {/* Stats rapides */}
+      <div style={{padding:"8px 18px 20px",display:"flex",gap:8}}>
+        {STATUTS.map(s=>(
+          <div key={s.v} style={{flex:1,background:"#0D0D0D",border:"1px solid #141414",borderRadius:8,padding:"8px",textAlign:"center"}}>
+            <div style={{fontSize:18,fontFamily:"'Bebas Neue',sans-serif",color:s.c}}>{events.filter(e=>e.statut===s.v).length}</div>
+            <div style={{fontSize:8,color:"#555",letterSpacing:1}}>{s.l.toUpperCase()}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Formulaire ajout/edit */}
+      {showForm&&(
+        <div className="panel"><div className="pin" style={{borderTopColor:"#74C0FC"}}>
+          <div style={{padding:"16px 20px",borderBottom:"1px solid #111",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontSize:9,color:"#74C0FC",letterSpacing:2}}>{editEvent?"MODIFIER L'ÉVÉNEMENT":"NOUVEL ÉVÉNEMENT"}</div>
+            <button onClick={()=>{setShowForm(false);setEditEvent(null);}} style={{background:"none",border:"none",color:"#999",fontSize:20,cursor:"pointer"}}>✕</button>
+          </div>
+          <div style={{padding:"18px 20px 40px",display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',sans-serif"}}>
+            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>DATE *</label><input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
+            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>TITRE *</label><input value={form.titre} onChange={e=>setForm(f=>({...f,titre:e.target.value}))} placeholder="Titre du post, reel…"/></div>
+            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:8,fontWeight:600}}>TYPE</label>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {TYPES.map(t=>(
+                  <button key={t.v} onClick={()=>setForm(f=>({...f,type:t.v,color:t.c}))} style={{background:form.type===t.v?`${t.c}18`:"#0D0D0D",border:`1px solid ${form.type===t.v?t.c:"#1A1A1A"}`,color:form.type===t.v?t.c:"#555",fontFamily:"'Inter',sans-serif",fontSize:10,padding:"6px 10px",borderRadius:20,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+                    {t.e} {t.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:8,fontWeight:600}}>STATUT</label>
+              <div style={{display:"flex",gap:6}}>
+                {STATUTS.map(s=>(
+                  <button key={s.v} onClick={()=>setForm(f=>({...f,statut:s.v}))} style={{flex:1,background:form.statut===s.v?`${s.c}18`:"#0D0D0D",border:`1px solid ${form.statut===s.v?s.c:"#1A1A1A"}`,color:form.statut===s.v?s.c:"#555",fontFamily:"'Inter',sans-serif",fontSize:10,padding:"7px 4px",borderRadius:6,cursor:"pointer",textAlign:"center"}}>{s.l}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:6}}>
+              <button className="btn" style={{flex:2,background:"#74C0FC",color:"#000"}} disabled={!form.date||!form.titre} onClick={saveEvent}>{editEvent?"Enregistrer":"Ajouter →"}</button>
+              {editEvent&&<button className="btn-o" style={{flex:1,color:"#F03E3E44",borderColor:"#F03E3E22"}} onClick={()=>{if(window.confirm("Supprimer ?"))delEvent(editEvent.id);}}>Suppr.</button>}
+            </div>
+            {editEvent&&<button onClick={()=>cycleStatut(editEvent.id)} style={{background:"none",border:"1px solid #1A1A1A",color:"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",borderRadius:6,cursor:"pointer"}}>Changer le statut →</button>}
           </div>
         </div></div>
       )}
@@ -1995,6 +2725,8 @@ function Chatbot({plan,onUpgrade,onClose}){
 }
 
 // ─── APP ROOT — état centralisé, navigation propre ───────────────────────────
+
+// ─── APP ROOT — état centralisé, navigation propre ───────────────────────────
 export default function App(){
   // ── État global (1 seul endroit) ──────────────────────────────────────────
   const [screen,  setScreen]  = useState("landing");   // landing | auth | onboarding | paywall | app
@@ -2111,7 +2843,7 @@ export default function App(){
         if(session?.user){
           const {data:profile} = await sb.from("profiles").select("*").eq("id",session.user.id).single();
           if(profile){
-            setUser({id:session.user.id,email:session.user.email,name:profile.name,genre:profile.genre});
+            setUser({id:session.user.id,email:session.user.email,name:profile.name,genre:profile.genre,role:profile.role,niveau:profile.niveau,objectif:profile.objectif});
             setPlan(profile.plan||"free");
             setScreen("app");
           }
@@ -2139,16 +2871,19 @@ export default function App(){
 
   // ── Contenu principal ─────────────────────────────────────────────────────
   const VIEWS = {
-    dashboard:   <Dashboard    projects={projects} setProjects={setProjects} onGoCoach={goCoach} onGoPlan={goPaywall} plan={plan} user={user}/>,
-    coach:       <Coach        projects={projects} setProjects={setProjects} activeId={activeId} setActiveId={setActiveId} plan={plan} onGoPlan={goPaywall} onGoOutils={()=>goTo("outils")}/>,
-    presskit:    <PressKit     projects={projects} plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    booking:     <Booking      plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    bibliotheque:<Bibliotheque plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    subventions: <Subventions  plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    annuaire:    <Annuaire     plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    actualites:  <Actualites   onBack={goBack}/>,
-    outils:      <Outils       onBack={goBack}/>,
-    profil:      <Profil       plan={plan} setPlan={setPlan} user={user} onGoPlan={goPaywall} onBack={goBack} onLogin={()=>setScreen("auth")}/>,
+    dashboard:    <Dashboard    projects={projects} setProjects={setProjects} onGoCoach={goCoach} onGoPlan={goPaywall} plan={plan} user={user}/>,
+    coach:        <Coach        projects={projects} setProjects={setProjects} activeId={activeId} setActiveId={setActiveId} plan={plan} onGoPlan={goPaywall} onGoOutils={()=>goTo("outils")}/>,
+    presskit:     <PressKit     projects={projects} plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    booking:      <Booking      plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    bibliotheque: <Bibliotheque plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    subventions:  <Subventions  plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    annuaire:     <Annuaire     plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    actualites:   <Actualites   onBack={goBack}/>,
+    outils:       <Outils       onBack={goBack}/>,
+    tracker:      <StreamingTracker plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    releaseplan:  <ReleasePlan  plan={plan} user={user} projects={projects} onGoPlan={goPaywall} onBack={goBack}/>,
+    calendrier:   <CampaignCalendar plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    profil:       <Profil       plan={plan} setPlan={setPlan} user={user} onGoPlan={goPaywall} onBack={goBack} onLogin={()=>setScreen("auth")}/>,
   };
 
   const NAV=[
@@ -2163,6 +2898,9 @@ export default function App(){
     {id:"subventions", l:"Financement",i:"💰",c:"#F03E3E"},
     {id:"annuaire",    l:"Annuaire",   i:"🗂️",c:"#845EF7"},
     {id:"outils",      l:"Mes outils", i:"🛠️",c:"#1DB954"},
+    {id:"tracker",     l:"Tracker",    i:"📊",c:"#1DB954"},
+    {id:"releaseplan", l:"Release",    i:"📅",c:"#FFD43B"},
+    {id:"calendrier",  l:"Calendrier", i:"🗓️",c:"#74C0FC"},
     {id:"actualites",  l:"Actualités", i:"📰",c:"#74C0FC"},
     {id:"profil",      l:"Compte",     i:"👤",c:"#FF6B35"},
   ];
@@ -2179,7 +2917,7 @@ export default function App(){
     setScreen("app");
   }} onLogin={()=>setScreen("auth")}/></div>;
   if(screen==="auth")       return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Auth onBack={()=>setScreen(user?"app":"landing")} onSuccess={u=>{setUser(u);setPlan(u.plan||"free");setScreen(u.name?"app":"onboarding");}}/></div>;
-  if(screen==="onboarding") return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Onboarding onDone={async(u)=>{const merged={...user,...u};setUser(merged);if(supabase&&merged.id){try{await supabase.from("profiles").update({name:u.name,genre:u.genre}).eq("id",merged.id);}catch(e){console.warn(e);}}setScreen("app");}}/></div>;
+  if(screen==="onboarding") return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Onboarding onDone={async(u)=>{const merged={...user,...u};setUser(merged);if(supabase&&merged.id){try{await supabase.from("profiles").update({name:u.name,genre:u.genre,role:u.role||null,niveau:u.niveau||null,objectif:u.objectif||null}).eq("id",merged.id);}catch(e){console.warn(e);}}setScreen("app");}}/></div>;
   if(screen==="paywall")    return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Paywall user={user} onNeedAuth={()=>setScreen("auth")} onSelect={async(p)=>{setPlan(p);if(supabase&&user?.id){try{await supabase.from("profiles").update({plan:p}).eq("id",user.id);}catch(e){console.warn(e);}}setScreen("app");}} current={plan}/></div>;
 
   return(
