@@ -830,20 +830,102 @@ function HowItWorks({empty=false, onGoCoach, plan}){
 // ─── DAILY COACH WIDGET — conseil IA personnalisé du jour ────────────────────
 // Génère un conseil ciblé selon le profil, les projets en cours, et l'objectif.
 // Résultat mis en cache localStorage (expire après 24h) pour éviter le spam API.
+// ─── RECOMMANDATIONS PERSONNALISÉES ──────────────────────────────────────────
+// Génère des recommandations immédiates basées sur le profil onboarding.
+// Affiché en haut du dashboard quand l'utilisateur a un objectif défini.
+function PersonalizedRecs({user,projects,plan,onGoCoach,onGoView}){
+  const obj=user?.objectif;
+  const niveau=user?.niveau;
+  const hasProjects=projects.length>0;
+  const firstProj=projects[0];
+
+  // Règles de recommandation selon objectif + niveau + état des projets
+  const getRecs=()=>{
+    const recs=[];
+
+    if(obj==="sortie"||!obj){
+      if(!hasProjects){
+        recs.push({icon:"🎵",color:"#FF6B35",titre:"Crée ton premier titre",desc:"Démarre ton parcours en ajoutant un titre sur le Dashboard.",cta:"Ajouter un titre",action:()=>onGoCoach(null)});
+      } else {
+        const g=firstProj?Math.round(Object.values(firstProj.progress||{}).reduce((a,b)=>a+b,0)/(Object.keys(firstProj.progress||{}).length||1)):0;
+        if(g<30){
+          recs.push({icon:"🎛️",color:"#FF6B35",titre:"Finalise ta production",desc:`"${firstProj?.titre}" est à ${g}% — priorité : mix et master aux normes streaming.`,cta:"Ouvrir le Coach",action:()=>onGoCoach(firstProj?.id)});
+        } else if(g<60){
+          recs.push({icon:"🔐",color:"#00C9A7",titre:"Protège tes droits",desc:"Dépose à la SACEM AVANT de distribuer. Ne passe pas cette étape.",cta:"Voir Protection",action:()=>onGoCoach(firstProj?.id)});
+        } else if(g<80){
+          recs.push({icon:"🚀",color:"#845EF7",titre:"Lance la distribution",desc:`Choisis ton distributeur et pitch Spotify 7 semaines avant la sortie.`,cta:"Voir Distribution",action:()=>onGoCoach(firstProj?.id)});
+        } else {
+          recs.push({icon:"📣",color:"#FFD43B",titre:"Prépare ta campagne promo",desc:"Génère ton Release Plan pour organiser les 30 jours avant ta sortie.",cta:"Release Plan →",action:()=>onGoView("releaseplan")});
+        }
+      }
+    }
+
+    if(obj==="live"){
+      recs.push({icon:"🏛️",color:"#20C997",titre:"Cible tes premières salles",desc:"Commence par les SMAC 100–300 pers. Pitcher par email avec EPK.",cta:"Voir l'Annuaire",action:()=>onGoView("annuaire")});
+      recs.push({icon:"📩",color:"#20C997",titre:"Génère ton email de booking",desc:"Un email percutant avec ton EPK en premier lien. On te le rédige.",cta:"Module Booking",action:()=>onGoView("booking")});
+    }
+
+    if(obj==="financement"){
+      recs.push({icon:"💰",color:"#F03E3E",titre:"Trouve tes aides éligibles",desc:"CNM, SACEM, ADAMI, DRAC — 4 questions pour identifier tes aides.",cta:"Matching subventions",action:()=>onGoView("subventions")});
+    }
+
+    if(obj==="distribution"){
+      recs.push({icon:"🛠️",color:"#1DB954",titre:"Choisis ton distributeur",desc:"DistroKid, TuneCore, Believe — comparatif neutre avec tutos inclus.",cta:"Voir les outils",action:()=>onGoView("outils")});
+    }
+
+    // Reco générique niveau débutant
+    if(niveau==="debut"&&recs.length<2){
+      recs.push({icon:"📚",color:"#C8A96E",titre:"Consulte la bibliothèque",desc:"Contrats, split sheet, guide SACEM, checklist sortie — tout ce qu'il te faut.",cta:"Voir les docs",action:()=>onGoView("bibliotheque")});
+    }
+
+    // Reco tracker si abonné et pas encore utilisé
+    if(plan!=="free"&&recs.length<2){
+      recs.push({icon:"📊",color:"#845EF7",titre:"Suis ta progression",desc:"Renseigne tes streams et followers pour voir ton momentum évoluer.",cta:"Streaming Tracker",action:()=>onGoView("tracker")});
+    }
+
+    return recs.slice(0,2); // max 2 recommandations visibles
+  };
+
+  const recs=getRecs();
+  if(!recs.length)return null;
+
+  return(
+    <div style={{margin:"14px 18px 0"}}>
+      <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+        <span style={{color:"#FF6B35"}}>◆</span>
+        {obj?"PRIORITÉS SELON TON OBJECTIF":"PROCHAINES ÉTAPES RECOMMANDÉES"}
+        {user?.name&&<span style={{color:"#333"}}>· {user.name.toUpperCase()}</span>}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {recs.map((r,i)=>(
+          <div key={i} className="fu" style={{background:"#0D0D0D",border:`1px solid ${r.color}22`,borderRadius:10,padding:"12px 14px",display:"flex",gap:12,alignItems:"center",animationDelay:`${i*0.06}s`,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:r.color,borderRadius:"3px 0 0 3px"}}/>
+            <div style={{width:36,height:36,borderRadius:9,background:`${r.color}15`,border:`1px solid ${r.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>{r.icon}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11,color:"#DDD",fontWeight:600,marginBottom:2}}>{r.titre}</div>
+              <div style={{fontSize:10,color:"#555",lineHeight:1.4}}>{r.desc}</div>
+            </div>
+            <button onClick={r.action} style={{background:r.color,border:"none",color:plan==="free"&&r.color==="#F03E3E"?"#FFF":"#000",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,fontWeight:700,padding:"7px 10px",borderRadius:7,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",lineHeight:1.3,textAlign:"center"}}>{r.cta}</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── DAILY COACH WIDGET — conseil IA personnalisé du jour ────────────────────
 function DailyCoachWidget({plan,user,projects,onGoPlan}){
   const [conseil,setConseil]=useState(null);
   const [loading,setLoading]=useState(false);
   const [open,setOpen]=useState(false);
   const CACHE_KEY="indy_daily_coach_v1";
 
-  // Charge le cache au mount
   useEffect(()=>{
     try{
       const raw=localStorage.getItem(CACHE_KEY);
       if(raw){
         const {text,date}=JSON.parse(raw);
-        const age=(Date.now()-date)/3600000; // heures
-        if(age<22){setConseil(text);}
+        if((Date.now()-date)/3600000<22)setConseil(text);
       }
     }catch{}
   },[]);
@@ -852,9 +934,10 @@ function DailyCoachWidget({plan,user,projects,onGoPlan}){
     if(plan==="free"){setOpen(true);return;}
     setLoading(true);
     const proj=projects[0];
-    const userCtx=`Artiste : ${user?.name||"artiste"} · Genre : ${user?.genre||"indé"} · Niveau : ${user?.niveau||""} · Objectif : ${user?.objectif||""}.`;
-    const projCtx=proj?`Projet actuel : "${proj.titre}" · Avancement global : ${Math.round(Object.values(proj.progress||{}).reduce((a,b)=>a+b,0)/(Object.keys(proj.progress||{}).length||1))}% · Étape : ${proj.stage||"création"} · Sortie estimée : ${proj.sortie||"non définie"}.`:"Aucun projet créé pour l'instant.";
-    const prompt=`${userCtx}\n${projCtx}\n\nDonne-moi UN conseil concret et actionnable pour aujourd'hui (3-4 phrases max). Commence directement par l'action. Pas d'introduction. Tutoie-moi. Sois précis, motivant, direct.`;
+    const g=proj?Math.round(Object.values(proj.progress||{}).reduce((a,b)=>a+b,0)/(Object.keys(proj.progress||{}).length||1)):0;
+    const userCtx=`Artiste : ${user?.name||"artiste"} · Genre : ${user?.genre||"indé"} · Niveau : ${user?.niveau||""} · Objectif principal : ${user?.objectif||"sortie"} · Rôle : ${user?.role||"artiste"}.`;
+    const projCtx=proj?`Projet : "${proj.titre}" · ${g}% · Étape : ${proj.stage||"création"} · Sortie : ${proj.sortie||"non définie"}.`:"Aucun projet créé.";
+    const prompt=`${userCtx}\n${projCtx}\n\nDonne UN conseil concret et actionnable pour aujourd'hui (3-4 phrases max). Commence par l'action. Pas d'intro. Tutoie-moi. Précis, motivant, direct.`;
     try{
       const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:COACH_SYS,messages:[{role:"user",content:prompt}],maxTokens:300})});
       const json=await res.json();
@@ -885,12 +968,7 @@ function DailyCoachWidget({plan,user,projects,onGoPlan}){
           <button onClick={()=>{setConseil(null);try{localStorage.removeItem(CACHE_KEY);}catch{}}} style={{background:"none",border:"1px solid #1A1A1A",color:"#444",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"6px 10px",borderRadius:6,cursor:"pointer",flexShrink:0}}>↺</button>
         )}
       </div>
-      {loading&&(
-        <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:8,borderTop:"1px solid #0F0F0F"}}>
-          <Equalizer color="#FF6B35" bars={3} height={11}/>
-          <span style={{fontSize:11,color:"#888"}}>Le coach réfléchit…</span>
-        </div>
-      )}
+      {loading&&<div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:8,borderTop:"1px solid #0F0F0F"}}><Equalizer color="#FF6B35" bars={3} height={11}/><span style={{fontSize:11,color:"#888"}}>Le coach réfléchit…</span></div>}
       {conseil&&!loading&&(
         <div className="fu" style={{padding:"0 16px 14px",borderTop:"1px solid #0F0F0F"}}>
           <div style={{fontSize:12,color:"#CCC",lineHeight:1.7,marginTop:10,whiteSpace:"pre-wrap"}}>{conseil}</div>
@@ -907,18 +985,35 @@ function DailyCoachWidget({plan,user,projects,onGoPlan}){
   );
 }
 
-function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user}){
+// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user,onGoView}){
   const [edit,setEdit]=useState(null);
   const [isNew,setIsNew]=useState(false);
   const [filterArtist,setFilterArtist]=useState(null);
   const urgent=projects.filter(p=>{const d=daysUntil(p.sortie);return d!==null&&d<=14&&d>=0;});
   const total=projects.length?Math.round(projects.reduce((a,p)=>a+gp(p.progress),0)/projects.length):0;
-  const maxP=plan==="free"?2:plan==="artiste"?5:Infinity; // free:2 titres, artiste:5, label:illimité
+  const maxP=plan==="free"?2:plan==="artiste"?5:Infinity;
   const save=(u)=>{if(isNew)setProjects(ps=>[...ps,{...u,id:crypto.randomUUID?crypto.randomUUID():""+Date.now(),checks:{}}]);else setProjects(ps=>ps.map(p=>p.id===u.id?u:p));setEdit(null);setIsNew(false);};
   const del=(id)=>{setProjects(ps=>ps.filter(p=>p.id!==id));setEdit(null);};
+
+  // Badge profil enrichi : affiche le niveau/objectif si renseigné
+  const profileBadge=user?.objectif||user?.niveau;
+  const OBJECTIF_LABELS={sortie:"🎵 Préparer une sortie",live:"🎤 Décrocher des dates",financement:"💰 Trouver des aides",distribution:"🚀 Mieux distribuer"};
+  const NIVEAU_LABELS={debut:"🌱 Débutant",dev:"🚀 En développement",confirme:"⭐ Confirmé",pro:"🏆 Pro"};
+
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
       <Hdr sub={user?.name?`BONJOUR ${user.name.toUpperCase()}`:"TABLEAU DE BORD"} right={<div style={{textAlign:"right"}}><div style={{fontSize:22,fontFamily:"'Bebas Neue',sans-serif"}}>{total}<span style={{color:"#222",fontSize:12}}>%</span></div><div style={{fontSize:9,color:"#555",letterSpacing:1}}>GLOBAL</div></div>}/>
+
+      {/* Bandeau profil enrichi — visible si niveau ou objectif défini */}
+      {profileBadge&&(
+        <div style={{padding:"8px 18px",borderBottom:"1px solid #0F0F0F",display:"flex",gap:8,alignItems:"center",overflowX:"auto",scrollbarWidth:"none"}}>
+          {user?.niveau&&<span className="pill" style={{background:"#FF6B3512",color:"#FF6B35",border:"1px solid #FF6B3522",flexShrink:0}}>{NIVEAU_LABELS[user.niveau]||user.niveau}</span>}
+          {user?.objectif&&<span className="pill" style={{background:"#845EF712",color:"#845EF7",border:"1px solid #845EF722",flexShrink:0}}>{OBJECTIF_LABELS[user.objectif]||user.objectif}</span>}
+          {user?.genre&&<span className="pill" style={{background:"#00C9A712",color:"#00C9A7",border:"1px solid #00C9A722",flexShrink:0}}>🎶 {user.genre}</span>}
+        </div>
+      )}
+
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid #111"}}>
         {[{l:"Titres",v:projects.length},{l:"En cours",v:projects.filter(p=>{const g=gp(p.progress);return g>0&&g<100;}).length},{l:"Prêts",v:projects.filter(p=>gp(p.progress)===100).length},{l:"Urgents",v:urgent.length,red:true}].map((s,i)=>(
           <div key={i} style={{padding:"11px 0",textAlign:"center",borderRight:i<3?"1px solid #111":"none"}}>
@@ -928,10 +1023,16 @@ function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user}){
         ))}
       </div>
 
-      {/* ── MODULE VISUEL : Comment INDY t'accompagne ───────────────────────── */}
-      {/* Affiché toujours, mais en mode "découverte" élargi quand 0 projet */}
+      {/* Recommandations personnalisées — au-dessus de HowItWorks */}
+      <PersonalizedRecs user={user} projects={projects} plan={plan} onGoCoach={onGoCoach} onGoView={onGoView}/>
+
+      {/* MODULE VISUEL */}
       <HowItWorks empty={projects.length===0} onGoCoach={onGoCoach} plan={plan}/>
+
+      {/* Daily Coach */}
       <DailyCoachWidget plan={plan} user={user} projects={projects} onGoPlan={onGoPlan}/>
+
+      {projects.length>0&&(
         <div style={{padding:"12px 18px 0"}}>
           <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:8}}>◆ AVANCEMENT PAR ÉTAPE</div>
           <div style={{display:"flex",flexDirection:"column",gap:5}}>
@@ -952,7 +1053,6 @@ function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user}){
         </div>
       )}
       {urgent.length>0&&<div style={{margin:"14px 18px 0",background:"#0E0808",border:"1px solid #F03E3E22",borderRadius:8,padding:"11px 14px"}}><div style={{fontSize:9,color:"#F03E3E",letterSpacing:2,marginBottom:7}}>⚡ SORTIES IMMINENTES</div>{urgent.map(p=><div key={p.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#666",padding:"3px 0"}}><span>{p.titre} <span style={{color:"#888"}}>· {p.artiste}</span></span><span style={{color:"#F03E3E"}}>J-{daysUntil(p.sortie)}</span></div>)}</div>}
-      {/* Filtre par artiste pour les labels */}
       {plan==="label"&&projects.length>0&&(()=>{
         const artists=[...new Set(projects.map(p=>p.artiste).filter(Boolean))];
         return artists.length>1?(
@@ -2871,7 +2971,7 @@ export default function App(){
 
   // ── Contenu principal ─────────────────────────────────────────────────────
   const VIEWS = {
-    dashboard:    <Dashboard    projects={projects} setProjects={setProjects} onGoCoach={goCoach} onGoPlan={goPaywall} plan={plan} user={user}/>,
+    dashboard:    <Dashboard    projects={projects} setProjects={setProjects} onGoCoach={goCoach} onGoPlan={goPaywall} plan={plan} user={user} onGoView={goTo}/>,
     coach:        <Coach        projects={projects} setProjects={setProjects} activeId={activeId} setActiveId={setActiveId} plan={plan} onGoPlan={goPaywall} onGoOutils={()=>goTo("outils")}/>,
     presskit:     <PressKit     projects={projects} plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
     booking:      <Booking      plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
