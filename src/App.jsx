@@ -870,7 +870,7 @@ function PersonalizedRecs({user,projects,plan,onGoCoach,onGoView}){
     }
 
     if(obj==="distribution"){
-      recs.push({icon:"🛠️",color:"#1DB954",titre:"Choisis ton distributeur",desc:"DistroKid, TuneCore, Believe — comparatif neutre avec tutos inclus.",cta:"Voir les outils",action:()=>onGoView("outils")});
+      recs.push({icon:"🤖",color:"#845EF7",titre:"Outils IA pour artistes",desc:"Bio, pitch Spotify, idées contenu, stratégie sortie — 7 générateurs IA.",cta:"IA Tools Hub",action:()=>onGoView("iatools")});
     }
 
     // Reco générique niveau débutant
@@ -2707,6 +2707,313 @@ function Outils({onBack}){
   );
 }
 
+
+// ─── IA TOOLS HUB ─────────────────────────────────────────────────────────────
+// Centrale de tous les outils IA : bio, pitch Spotify, idées contenu,
+// stratégie sortie, analyse lyrics, hook de titre.
+// Les outils existants (PressKit, EmailGen Booking) sont référencés ici
+// avec lien direct. Les nouveaux outils sont intégrés directement.
+const IA_TOOLS = [
+  {
+    id:"bio_courte",
+    cat:"rédaction",
+    icon:"✍️",
+    color:"#FF6B35",
+    titre:"Bio artiste courte",
+    desc:"Bio ~100 mots pour réseaux sociaux, Spotify, Instagram.",
+    plan:"artiste",
+    fields:[
+      {k:"nom",l:"Nom d'artiste *",p:"Saya, TiF…"},
+      {k:"genre",l:"Genre *",p:"Afro Pop, R&B…"},
+      {k:"influences",l:"3 influences",p:"Burna Boy, Aya Nakamura…"},
+      {k:"actu",l:"Actu / dernier projet",p:"EP sorti en 2026…"},
+    ],
+    prompt:(d)=>`Bio artiste courte ~100 mots, percutante, pour réseaux sociaux et Spotify.\nArtiste : ${d.nom}\nGenre : ${d.genre}\nInfluences : ${d.influences||""}\nActu : ${d.actu||""}\nStyle direct, vivant, pas de clichés. Tutoie-moi. Commence par l'artiste, pas par une intro générique.`,
+  },
+  {
+    id:"bio_longue",
+    cat:"rédaction",
+    icon:"📰",
+    color:"#FF6B35",
+    titre:"Bio artiste longue",
+    desc:"Bio journalistique ~300 mots pour dossier de presse et booking.",
+    plan:"artiste",
+    fields:[
+      {k:"nom",l:"Nom d'artiste *",p:"Saya, TiF…"},
+      {k:"genre",l:"Genre *",p:"Afro Pop, R&B…"},
+      {k:"influences",l:"Influences",p:"Burna Boy, Aya Nakamura…"},
+      {k:"parcours",l:"Ton parcours",p:"3 ans de scène, 200K streams…"},
+      {k:"actu",l:"Dernier projet",p:"EP sorti en 2026…"},
+    ],
+    prompt:(d)=>`Bio artiste longue ~300 mots, style journalistique pour dossier de presse et booking.\nArtiste : ${d.nom}\nGenre : ${d.genre}\nInfluences : ${d.influences||""}\nParcours : ${d.parcours||""}\nProjet : ${d.actu||""}\nTon professionnel, narratif, avec relief. Pas de clichés. En français.`,
+  },
+  {
+    id:"pitch_spotify",
+    cat:"distribution",
+    icon:"🎧",
+    color:"#1DB954",
+    titre:"Pitch Spotify éditorial",
+    desc:"Message pour convaincre les éditeurs Spotify en 150 mots.",
+    plan:"artiste",
+    fields:[
+      {k:"nom",l:"Nom d'artiste *",p:"Saya…"},
+      {k:"titre",l:"Titre du morceau *",p:"Mon titre…"},
+      {k:"genre",l:"Genre + mood *",p:"Afro Pop · nostalgique…"},
+      {k:"sortie",l:"Date de sortie",p:"15 juin 2026"},
+      {k:"stats",l:"Stats actuelles",p:"50K auditeurs, Skyrock…"},
+    ],
+    prompt:(d)=>`Pitch Spotify éditorial ~150 mots pour convaincre les playlist editors.\nArtiste : ${d.nom}\nTitre : ${d.titre}\nGenre/mood : ${d.genre}\nSortie : ${d.sortie||"prochainement"}\nStats : ${d.stats||"artiste émergent"}\nStructure : accroche forte · description musicale précise · contexte artiste · appel à l'action. Pas de formules génériques. Direct, percutant.`,
+  },
+  {
+    id:"idees_contenu",
+    cat:"réseaux",
+    icon:"📱",
+    color:"#F783AC",
+    titre:"7 idées de contenu",
+    desc:"7 idées de posts/reels/stories adaptés à ton genre et ta sortie.",
+    plan:"artiste",
+    fields:[
+      {k:"nom",l:"Nom d'artiste *",p:"Saya…"},
+      {k:"genre",l:"Genre *",p:"Afro Pop…"},
+      {k:"actu",l:"Actualité du moment",p:"Sortie EP, tournée…"},
+      {k:"plateforme",l:"Plateformes",p:"Instagram, TikTok"},
+    ],
+    prompt:(d)=>`Génère 7 idées de contenu créatives et engageantes pour les réseaux sociaux.\nArtiste : ${d.nom}\nGenre : ${d.genre}\nActu : ${d.actu||"sortie prochaine"}\nPlateformes : ${d.plateforme||"Instagram, TikTok"}\nFormat : numérote chaque idée. Précise le format (Reel, Story, Post, TikTok). Inclus une accroche ou un texte de légende court. Idées originales, pas génériques. Tutoie-moi.`,
+  },
+  {
+    id:"strategie_sortie",
+    cat:"stratégie",
+    icon:"🎯",
+    color:"#845EF7",
+    titre:"Stratégie de sortie",
+    desc:"Plan stratégique complet sur 4 semaines pour maximiser ta sortie.",
+    plan:"artiste",
+    fields:[
+      {k:"nom",l:"Nom d'artiste *",p:"Saya…"},
+      {k:"genre",l:"Genre *",p:"Afro Pop…"},
+      {k:"titre",l:"Titre / Projet",p:"Mon EP…"},
+      {k:"audience",l:"Audience actuelle",p:"5K followers, 20K streams/mois…"},
+      {k:"budget",l:"Budget promo estimé",p:"500€, 0€, 1000€…"},
+    ],
+    prompt:(d)=>`Stratégie de sortie complète sur 4 semaines pour un artiste indépendant français.\nArtiste : ${d.nom} · Genre : ${d.genre}\nProjet : ${d.titre||"sortie prochaine"}\nAudience : ${d.audience||"émergent"}\nBudget : ${d.budget||"limité"}\nStructure : 1) Semaine -4 (avant) 2) Semaine -2 3) Semaine 0 (sortie) 4) Semaine +1 (relance)\nPour chaque semaine : 3 actions concrètes avec canaux précis. Budget réparti si non nul. Adapté au genre ${d.genre}. Pas de généralités.`,
+  },
+  {
+    id:"hook_titre",
+    cat:"création",
+    icon:"🎵",
+    color:"#FFD43B",
+    titre:"Analyse de hook",
+    desc:"Analyse de l'accroche de ton titre + suggestions d'amélioration.",
+    plan:"artiste",
+    fields:[
+      {k:"hook",l:"Ton hook / refrain *",p:"Colle tes paroles ici…"},
+      {k:"genre",l:"Genre *",p:"Afro Pop…"},
+      {k:"vibe",l:"Ambiance voulue",p:"Nostalgique, festif, mélancolique…"},
+    ],
+    prompt:(d)=>`Analyse ce hook/refrain en tant qu'expert en composition musicale pour le marché francophone.\nHook : "${d.hook}"\nGenre : ${d.genre}\nAmbiance : ${d.vibe||"non précisée"}\nDonne : 1) Ce qui fonctionne (mélodie, texte, accroche) 2) Ce qui peut être amélioré 3) 2 alternatives concrètes du hook. Sois direct, pas condescendant. Tutoie-moi.`,
+  },
+  {
+    id:"email_presse",
+    cat:"rédaction",
+    icon:"📩",
+    color:"#74C0FC",
+    titre:"Email presse / blogs",
+    desc:"Email percutant pour démarcher blogs, webzines et médias musicaux.",
+    plan:"artiste",
+    fields:[
+      {k:"nom",l:"Nom d'artiste *",p:"Saya…"},
+      {k:"genre",l:"Genre *",p:"Afro Pop…"},
+      {k:"titre",l:"Titre / Projet à pitcher",p:"Mon EP…"},
+      {k:"stats",l:"Stats / réalisations",p:"50K streams, Skyrock…"},
+      {k:"media",l:"Nom du média cible",p:"Indie Music FR, RFI…"},
+    ],
+    prompt:(d)=>`Email de démarchage presse professionnel et percutant (150-180 mots).\nArtiste : ${d.nom} · Genre : ${d.genre}\nProjet : ${d.titre||"sortie prochaine"}\nStats : ${d.stats||"artiste émergent"}\nMédia ciblé : ${d.media||"blog musical"}\nStructure : objet accrocheur · intro directe · pitch artistique · proposition concrète · lien EPK. Pas de politesse excessive. Ton humain mais pro. En français.`,
+  },
+];
+
+function IAToolsHub({plan,user,projects,onGoPlan,onBack}){
+  const [activeTool,setActiveTool]=useState(null);
+  const [catFilter,setCatFilter]=useState("tous");
+  const [formData,setFormData]=useState({});
+  const [phase,setPhase]=useState("form"); // form | loading | result
+  const [result,setResult]=useState("");
+  const [copied,setCopied]=useState(false);
+
+  const CATS_HUB=[
+    {id:"tous",l:"Tous",i:"🛠️"},
+    {id:"rédaction",l:"Rédaction",i:"✍️"},
+    {id:"distribution",l:"Distribution",i:"🚀"},
+    {id:"réseaux",l:"Réseaux",i:"📱"},
+    {id:"stratégie",l:"Stratégie",i:"🎯"},
+    {id:"création",l:"Création",i:"🎵"},
+  ];
+
+  const filtered=catFilter==="tous"?IA_TOOLS:IA_TOOLS.filter(t=>t.cat===catFilter);
+  const isLocked=plan==="free";
+
+  const openTool=(tool)=>{
+    // Pré-remplir depuis le profil + premier projet
+    const proj=projects[0];
+    const pre={};
+    if(tool.fields.find(f=>f.k==="nom"))pre.nom=proj?.artiste||user?.name||"";
+    if(tool.fields.find(f=>f.k==="genre"))pre.genre=proj?.genre||user?.genre||"";
+    if(tool.fields.find(f=>f.k==="titre"))pre.titre=proj?.titre||"";
+    setFormData(pre);
+    setActiveTool(tool);
+    setPhase("form");
+    setResult("");
+    setCopied(false);
+  };
+
+  const gen=async()=>{
+    if(isLocked){setPhase("locked");return;}
+    const required=activeTool.fields.filter(f=>f.l.includes("*"));
+    if(required.some(f=>!formData[f.k]?.trim()))return;
+    setPhase("loading");
+    const prompt=activeTool.prompt(formData);
+    try{
+      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:AI_SYSTEM,messages:[{role:"user",content:prompt}],maxTokens:1200})});
+      const json=await res.json();
+      setResult(json.content?.map(b=>b.text||"").join("")||"Erreur de génération.");
+    }catch{setResult("Erreur de connexion. Réessaie dans un instant.");}
+    setPhase("result");
+  };
+
+  // Vue détail d'un outil
+  if(activeTool){
+    return(
+      <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
+        <Hdr sub={activeTool.titre.toUpperCase()} accent={activeTool.color} onBack={()=>{setActiveTool(null);setPhase("form");}}/>
+
+        {phase==="form"&&(
+          <div style={{padding:"18px 18px 40px",display:"flex",flexDirection:"column",gap:12}}>
+            {/* Carte outil */}
+            <div style={{background:"#0D0D0D",border:`1px solid ${activeTool.color}22`,borderRadius:10,padding:"13px 16px",display:"flex",gap:10,alignItems:"center"}}>
+              <div style={{width:40,height:40,borderRadius:10,background:`${activeTool.color}15`,border:`1px solid ${activeTool.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{activeTool.icon}</div>
+              <div><div style={{fontSize:11,color:activeTool.color,fontWeight:600,marginBottom:2}}>{activeTool.titre}</div><div style={{fontSize:10,color:"#555",lineHeight:1.4}}>{activeTool.desc}</div></div>
+            </div>
+            {activeTool.fields.map(f=>(
+              <div key={f.k}>
+                <label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>{f.l}</label>
+                {f.k==="hook"?(
+                  <textarea value={formData[f.k]||""} onChange={e=>setFormData(d=>({...d,[f.k]:e.target.value}))} placeholder={f.p} rows={4} style={{width:"100%"}}/>
+                ):(
+                  <input value={formData[f.k]||""} onChange={e=>setFormData(d=>({...d,[f.k]:e.target.value}))} placeholder={f.p}/>
+                )}
+              </div>
+            ))}
+            <button
+              onClick={isLocked?()=>setPhase("locked"):gen}
+              disabled={!isLocked&&activeTool.fields.filter(f=>f.l.includes("*")).some(f=>!formData[f.k]?.trim())}
+              style={{background:isLocked?"#1A1A1A":`linear-gradient(135deg,${activeTool.color},${activeTool.color}CC)`,border:isLocked?`1px solid ${activeTool.color}33`:"none",color:isLocked?activeTool.color:"#000",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:2,textTransform:"uppercase",padding:"13px 20px",borderRadius:8,cursor:"pointer",fontWeight:600,width:"100%",marginTop:4}}
+            >
+              {isLocked?"🔒 Réservé aux abonnés":`✦ Générer — ${activeTool.titre}`}
+            </button>
+          </div>
+        )}
+
+        {phase==="locked"&&(
+          <div style={{padding:"30px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+            <div style={{fontSize:40}}>{activeTool.icon}</div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:3}}>RÉSERVÉ AUX ABONNÉS</div>
+            <div style={{fontSize:11,color:"#555",lineHeight:1.7,maxWidth:280}}>{activeTool.desc}</div>
+            <button className="btn" style={{maxWidth:300,width:"100%"}} onClick={onGoPlan}>S'abonner — 9,90€/mois →</button>
+            <button className="btn-o" style={{maxWidth:300,width:"100%"}} onClick={()=>setPhase("form")}>← Retour</button>
+          </div>
+        )}
+
+        {phase==="loading"&&(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"55vh",gap:16}}>
+            <div style={{fontSize:32}}>{activeTool.icon}</div>
+            <div style={{fontSize:13,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:3,color:activeTool.color}}>GÉNÉRATION EN COURS</div>
+            <Equalizer color={activeTool.color} bars={5} height={18}/>
+          </div>
+        )}
+
+        {phase==="result"&&(
+          <div style={{padding:"16px 18px 40px"}}>
+            {/* Header résultat */}
+            <div style={{background:"#0D0D0D",border:`1px solid ${activeTool.color}22`,borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:18}}>{activeTool.icon}</span>
+              <div style={{flex:1}}><div style={{fontSize:11,color:activeTool.color,fontWeight:600}}>{activeTool.titre}</div><div style={{fontSize:9,color:"#555"}}>{result.split(/\s+/).filter(Boolean).length} mots</div></div>
+              <button onClick={()=>setPhase("form")} style={{background:"none",border:"1px solid #1A1A1A",color:"#444",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"5px 10px",borderRadius:6,cursor:"pointer"}}>Modifier</button>
+            </div>
+            <div style={{background:"#0D0D0D",border:"1px solid #141414",borderRadius:8,padding:18,fontSize:12,lineHeight:1.9,color:"#BBB",whiteSpace:"pre-wrap",marginBottom:14}}>{result}</div>
+            <div style={{display:"flex",gap:10}}>
+              <button style={{flex:1,background:"none",border:`1px solid ${copied?"#00C9A7":activeTool.color+"44"}`,color:copied?"#00C9A7":activeTool.color,fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:2,padding:12,borderRadius:5,cursor:"pointer"}} onClick={()=>{navigator.clipboard.writeText(result);setCopied(true);setTimeout(()=>setCopied(false),2000);}}>
+                {copied?"✓ Copié !":"Copier"}
+              </button>
+              <button className="btn-o" onClick={()=>{setPhase("form");setResult("");}}>↺ Refaire</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Vue liste des outils
+  return(
+    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
+      <Hdr sub="IA TOOLS HUB" accent="#845EF7" onBack={onBack}/>
+
+      {/* Intro */}
+      <div style={{padding:"12px 18px 0"}}>
+        <div style={{background:"linear-gradient(135deg,#0D0D0D,#0A0A0A)",border:"1px solid #845EF722",borderRadius:10,padding:"13px 16px",marginBottom:14,display:"flex",gap:12,alignItems:"flex-start",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#845EF7,#FF6B35)"}}/>
+          <span style={{fontSize:22,flexShrink:0}}>🤖</span>
+          <div>
+            <div style={{fontSize:11,color:"#DDD",fontWeight:600,marginBottom:4}}>{IA_TOOLS.length} outils IA pour artistes indépendants</div>
+            <div style={{fontSize:11,color:"#555",lineHeight:1.6}}>Bio, pitch Spotify, idées contenu, stratégie, email presse… Pré-rempli depuis ton profil artiste.</div>
+          </div>
+        </div>
+
+        {/* Filtre catégories */}
+        <div style={{display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2,marginBottom:14}}>
+          {CATS_HUB.map(c=>(
+            <button key={c.id} onClick={()=>setCatFilter(c.id)} style={{flexShrink:0,background:catFilter===c.id?"#845EF7":"#111",border:`1px solid ${catFilter===c.id?"#845EF7":"#222"}`,color:catFilter===c.id?"#FFF":"#888",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1.5,padding:"6px 12px",borderRadius:20,cursor:"pointer",fontWeight:catFilter===c.id?700:400,transition:"all 0.2s"}}>
+              {c.i} {c.l.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        {/* Grille outils */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {filtered.map((tool,i)=>(
+            <div key={tool.id} className="fu card" style={{padding:0,overflow:"hidden",cursor:"pointer",animationDelay:`${i*0.04}s`,borderColor:`${tool.color}22`}} onClick={()=>openTool(tool)}>
+              <div style={{height:2,background:tool.color}}/>
+              <div style={{padding:"13px 12px"}}>
+                <div style={{width:36,height:36,borderRadius:9,background:`${tool.color}15`,border:`1px solid ${tool.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,marginBottom:8}}>{tool.icon}</div>
+                <div style={{fontSize:12,color:"#CCC",fontWeight:600,lineHeight:1.3,marginBottom:5}}>{tool.titre}</div>
+                <div style={{fontSize:10,color:"#444",lineHeight:1.4,marginBottom:8}}>{tool.desc}</div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:8,color:tool.color,background:`${tool.color}15`,padding:"2px 7px",borderRadius:10,letterSpacing:0.5}}>{tool.cat}</span>
+                  {isLocked&&<span style={{fontSize:10,opacity:0.4}}>🔒</span>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Lien vers outils/distributeurs */}
+        <div style={{marginTop:16,background:"#0A0A0A",border:"1px solid #1A1A1A",borderRadius:10,padding:"12px 16px",display:"flex",gap:10,alignItems:"center"}}>
+          <span style={{fontSize:18}}>🛠️</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,color:"#888",lineHeight:1.4}}>Tu cherches des distributeurs ou outils externes ?</div>
+          </div>
+          <button onClick={onBack} style={{background:"none",border:"1px solid #222",color:"#555",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"6px 10px",borderRadius:6,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>Mes Outils →</button>
+        </div>
+
+        {isLocked&&(
+          <div style={{marginTop:12,background:"#0D0D0D",border:"1px solid #845EF733",borderRadius:10,padding:"14px 16px",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#666",marginBottom:10,lineHeight:1.6}}>Tous les outils IA sont réservés aux abonnés</div>
+            <button className="btn" onClick={onGoPlan}>S'abonner dès 9,90€/mois →</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── PROFIL ──────────────────────────────────────────────────────────────────
 function Profil({plan,setPlan,user,onGoPlan,onBack,onLogin}){
   const PI={free:{l:"DÉCOUVERTE",c:"#999"},artiste:{l:"ARTISTE",c:"#FF6B35"},label:{l:"LABEL",c:"#C8A96E"}};
@@ -2980,6 +3287,7 @@ export default function App(){
     annuaire:     <Annuaire     plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
     actualites:   <Actualites   onBack={goBack}/>,
     outils:       <Outils       onBack={goBack}/>,
+    iatools:      <IAToolsHub   plan={plan} user={user} projects={projects} onGoPlan={goPaywall} onBack={goBack}/>,
     tracker:      <StreamingTracker plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
     releaseplan:  <ReleasePlan  plan={plan} user={user} projects={projects} onGoPlan={goPaywall} onBack={goBack}/>,
     calendrier:   <CampaignCalendar plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
@@ -2998,6 +3306,7 @@ export default function App(){
     {id:"subventions", l:"Financement",i:"💰",c:"#F03E3E"},
     {id:"annuaire",    l:"Annuaire",   i:"🗂️",c:"#845EF7"},
     {id:"outils",      l:"Mes outils", i:"🛠️",c:"#1DB954"},
+    {id:"iatools",     l:"IA Tools",   i:"🤖",c:"#845EF7"},
     {id:"tracker",     l:"Tracker",    i:"📊",c:"#1DB954"},
     {id:"releaseplan", l:"Release",    i:"📅",c:"#FFD43B"},
     {id:"calendrier",  l:"Calendrier", i:"🗓️",c:"#74C0FC"},
