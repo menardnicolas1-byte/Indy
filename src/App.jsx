@@ -506,28 +506,49 @@ function Auth({onSuccess, onBack}){
 // ─── PAYWALL — unique composant d'accès ──────────────────────────────────────
 function Paywall({onSelect, current, user, onNeedAuth}){
   const [confirming,setConfirming]=useState(null); // plan en attente de confirmation paiement
+  const [waitingPayment,setWaitingPayment]=useState(false); // Stripe ouvert, attente webhook
+  const [checking,setChecking]=useState(false);
+  const [checkMsg,setCheckMsg]=useState(null);
 
   const choose=(plan)=>{
     if(plan.id==="free"){onSelect("free");return;}
-    // Si l'utilisateur est en mode "guest" (découverte sans compte),
-    // on lui demande de créer un compte AVANT d'aller au paiement.
     if(!user||user.guest||!user.id){
       if(onNeedAuth)onNeedAuth();
       return;
     }
-    // Pour artiste/label : afficher modale de confirmation interne
     setConfirming(plan);
+    setWaitingPayment(false);
+    setCheckMsg(null);
   };
 
   const confirmPayment=()=>{
-    // Ouvre Stripe Checkout dans nouvel onglet
+    // Ouvre Stripe Checkout dans un nouvel onglet
     window.open(confirming.link,"_blank","noopener,noreferrer");
-    // L'accès est débloqué après que l'utilisateur revient de Stripe
-    // (en prod : webhook Stripe → Supabase mettra à jour le plan)
-    setTimeout(()=>{onSelect(confirming.id);setConfirming(null);},800);
+    // On attend que le webhook Stripe mette à jour Supabase — on n'upgrades PAS ici
+    setWaitingPayment(true);
   };
 
-  const cancelPayment=()=>setConfirming(null);
+  const checkPlan=async()=>{
+    if(!user?.id)return;
+    setChecking(true);
+    setCheckMsg(null);
+    try{
+      const sb=await initSupabase();
+      if(!sb){setChecking(false);return;}
+      const {data}=await sb.from("profiles").select("plan").eq("id",user.id).single();
+      const newPlan=data?.plan;
+      if(newPlan&&newPlan!=="free"&&newPlan!==current){
+        // Webhook a bien mis à jour le plan → on entre dans l'app
+        onSelect(newPlan);
+      } else {
+        setCheckMsg("Paiement pas encore reçu — attends quelques secondes et réessaie.");
+        setTimeout(()=>setCheckMsg(null),5000);
+      }
+    }catch(e){console.warn(e);}
+    setChecking(false);
+  };
+
+  const cancelPayment=()=>{setConfirming(null);setWaitingPayment(false);setCheckMsg(null);};
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif"}}>
       {/* Header compact (réduit pour laisser de la place aux plans) */}
@@ -597,23 +618,42 @@ function Paywall({onSelect, current, user, onNeedAuth}){
 
       {/* ── Modale de confirmation paiement ── */}
       {confirming&&(
-        <div style={{position:"fixed",inset:0,background:"#000000DD",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",animation:"fadeIn 0.2s ease"}} onClick={cancelPayment}>
+        <div style={{position:"fixed",inset:0,background:"#000000DD",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",animation:"fadeIn 0.2s ease"}} onClick={!waitingPayment?cancelPayment:undefined}>
           <div className="fu" style={{background:"#0D0D0D",border:`1px solid ${confirming.color}44`,borderRadius:14,padding:"24px 22px",maxWidth:340,width:"100%",position:"relative"}} onClick={e=>e.stopPropagation()}>
             <div style={{height:3,background:confirming.color,borderRadius:2,marginBottom:16,opacity:0.6}}/>
-            <div style={{fontSize:9,color:confirming.color,letterSpacing:2,marginBottom:6}}>CONFIRMER L'ABONNEMENT</div>
-            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,letterSpacing:3,marginBottom:14}}>{confirming.name}</div>
-            <div style={{fontSize:13,color:"#888",lineHeight:1.7,marginBottom:18}}>
-              Tu vas être redirigé(e) vers <strong style={{color:"#F0EDE8"}}>Stripe</strong> pour finaliser ton paiement.
-            </div>
-            <div style={{background:"#080808",border:"1px solid #141414",borderRadius:8,padding:"10px 12px",marginBottom:18,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:11,color:"#888"}}>Montant</span>
-              <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:confirming.color}}>{confirming.price}<span style={{color:"#666",fontSize:11,marginLeft:3}}>{confirming.period}</span></span>
-            </div>
-            <div style={{display:"flex",gap:10}}>
-              <button className="btn-o" style={{flex:1}} onClick={cancelPayment}>Annuler</button>
-              <button className="btn" style={{flex:2,background:confirming.color,color:"#000"}} onClick={confirmPayment}>Continuer →</button>
-            </div>
-            <div style={{fontSize:9,color:"#444",textAlign:"center",marginTop:12,letterSpacing:1}}>3 jours d'essai · Résiliable à tout moment</div>
+            {!waitingPayment?(
+              <>
+                <div style={{fontSize:9,color:confirming.color,letterSpacing:2,marginBottom:6}}>CONFIRMER L'ABONNEMENT</div>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,letterSpacing:3,marginBottom:14}}>{confirming.name}</div>
+                <div style={{fontSize:13,color:"#888",lineHeight:1.7,marginBottom:18}}>
+                  Tu vas être redirigé(e) vers <strong style={{color:"#F0EDE8"}}>Stripe</strong> pour finaliser ton paiement.
+                </div>
+                <div style={{background:"#080808",border:"1px solid #141414",borderRadius:8,padding:"10px 12px",marginBottom:18,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:11,color:"#888"}}>Montant</span>
+                  <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:confirming.color}}>{confirming.price}<span style={{color:"#666",fontSize:11,marginLeft:3}}>{confirming.period}</span></span>
+                </div>
+                <div style={{display:"flex",gap:10}}>
+                  <button className="btn-o" style={{flex:1}} onClick={cancelPayment}>Annuler</button>
+                  <button className="btn" style={{flex:2,background:confirming.color,color:"#000"}} onClick={confirmPayment}>Continuer →</button>
+                </div>
+                <div style={{fontSize:9,color:"#444",textAlign:"center",marginTop:12,letterSpacing:1}}>3 jours d'essai · Résiliable à tout moment</div>
+              </>
+            ):(
+              <>
+                <div style={{fontSize:9,color:confirming.color,letterSpacing:2,marginBottom:6}}>PAIEMENT EN COURS</div>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,letterSpacing:3,marginBottom:12}}>{confirming.name}</div>
+                <div style={{background:"#080808",border:`1px solid ${confirming.color}22`,borderRadius:10,padding:"14px",marginBottom:16,textAlign:"center"}}>
+                  <div style={{fontSize:20,marginBottom:8}}>💳</div>
+                  <div style={{fontSize:12,color:"#888",lineHeight:1.6}}>Stripe est ouvert dans un autre onglet.<br/>Finalise ton paiement puis reviens ici.</div>
+                </div>
+                {checkMsg&&<div style={{background:"#1A0A0A",border:"1px solid #F03E3E33",borderRadius:8,padding:"9px 12px",marginBottom:12,fontSize:11,color:"#F03E3E",textAlign:"center"}}>{checkMsg}</div>}
+                <button className="btn" style={{width:"100%",background:confirming.color,color:"#000",marginBottom:10,opacity:checking?0.6:1}} onClick={checkPlan} disabled={checking}>
+                  {checking?"⏳ Vérification…":"✓ J'ai payé — Activer mon plan"}
+                </button>
+                <button className="btn-o" style={{width:"100%",color:"#555",borderColor:"#1A1A1A",fontSize:10}} onClick={cancelPayment}>Annuler</button>
+                <div style={{fontSize:9,color:"#333",textAlign:"center",marginTop:10,letterSpacing:1}}>L'activation est automatique après confirmation Stripe</div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -646,102 +686,33 @@ function Landing({onEnter, onLogin}){
 }
 
 // ─── ONBOARDING ──────────────────────────────────────────────────────────────
-// ─── ONBOARDING ENRICHI ───────────────────────────────────────────────────────
 function Onboarding({onDone}){
   const [step,setStep]=useState(0);
-  const [data,setData]=useState({name:"",genre:"",role:"",niveau:"",objectif:"",sortie:""});
-
-  const ROLES=[
-    {v:"artiste",l:"Artiste / Chanteur·se",e:"🎤"},
-    {v:"beatmaker",l:"Beatmaker / Producteur",e:"🎛️"},
-    {v:"groupe",l:"Groupe / Collectif",e:"🎸"},
-    {v:"manager",l:"Manager / Label",e:"👔"},
-  ];
-  const NIVEAUX=[
-    {v:"debut",l:"Je commence (0–1 an)",e:"🌱"},
-    {v:"dev",l:"En développement (1–3 ans)",e:"🚀"},
-    {v:"confirme",l:"Confirmé (3+ ans, sorties)",e:"⭐"},
-    {v:"pro",l:"Semi-pro / Pro",e:"🏆"},
-  ];
-  const OBJECTIFS=[
-    {v:"sortie",l:"Préparer ma prochaine sortie",e:"🎵"},
-    {v:"live",l:"Décrocher des dates de concert",e:"🎤"},
-    {v:"financement",l:"Trouver des aides / subventions",e:"💰"},
-    {v:"distribution",l:"Mieux distribuer ma musique",e:"🚀"},
-  ];
-
+  const [name,setName]=useState("");
+  const [genre,setGenre]=useState("");
   const steps=[
-    {e:"🎵",t:"BIENVENUE\nCHEZ INDY",s:"Le cockpit carrière de l'artiste indépendant",c:null},
-    {e:"🎤",t:"TON NOM\nD'ARTISTE",s:"Comment tu t'appelles ?",c:(
-      <input value={data.name} onChange={e=>setData(d=>({...d,name:e.target.value}))} placeholder="Saya, TiF, Mon Artiste…" style={{fontSize:15,padding:16,textAlign:"center"}}/>
-    )},
-    {e:"🎛️",t:"TON GENRE\nMUSICAL",s:"Afro Pop, R&B, Trap FR…",c:(
-      <input value={data.genre} onChange={e=>setData(d=>({...d,genre:e.target.value}))} placeholder="Afro Pop, R&B FR, Drill…" style={{fontSize:15,padding:16,textAlign:"center"}}/>
-    )},
-    {e:"🏷️",t:"TON RÔLE",s:"Comment tu te positionnes dans la musique ?",c:(
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {ROLES.map(r=>(
-          <button key={r.v} onClick={()=>setData(d=>({...d,role:r.v}))} style={{background:data.role===r.v?"#FF6B3518":"#0D0D0D",border:`1px solid ${data.role===r.v?"#FF6B35":"#1A1A1A"}`,color:data.role===r.v?"#FF6B35":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"12px 15px",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
-            <span style={{fontSize:18}}>{r.e}</span>{r.l}
-          </button>
-        ))}
-      </div>
-    )},
-    {e:"📊",t:"TON NIVEAU",s:"Où en es-tu dans ta carrière ?",c:(
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {NIVEAUX.map(n=>(
-          <button key={n.v} onClick={()=>setData(d=>({...d,niveau:n.v}))} style={{background:data.niveau===n.v?"#845EF718":"#0D0D0D",border:`1px solid ${data.niveau===n.v?"#845EF7":"#1A1A1A"}`,color:data.niveau===n.v?"#845EF7":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"12px 15px",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
-            <span style={{fontSize:18}}>{n.e}</span>{n.l}
-          </button>
-        ))}
-      </div>
-    )},
-    {e:"🎯",t:"TON OBJECTIF",s:"Quelle est ta priorité en ce moment ?",c:(
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {OBJECTIFS.map(o=>(
-          <button key={o.v} onClick={()=>setData(d=>({...d,objectif:o.v}))} style={{background:data.objectif===o.v?"#00C9A718":"#0D0D0D",border:`1px solid ${data.objectif===o.v?"#00C9A7":"#1A1A1A"}`,color:data.objectif===o.v?"#00C9A7":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"12px 15px",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
-            <span style={{fontSize:18}}>{o.e}</span>{o.l}
-          </button>
-        ))}
-      </div>
-    )},
-    {e:"📅",t:"DATE DE\nSORTIE ESTIMÉE",s:"Tu as un projet en cours ? (optionnel)",c:(
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <input type="date" value={data.sortie} onChange={e=>setData(d=>({...d,sortie:e.target.value}))} style={{textAlign:"center",padding:14}}/>
-        <button onClick={()=>setData(d=>({...d,sortie:""}))} style={{background:"none",border:"1px solid #1A1A1A",color:"#555",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:1.5,padding:"10px",borderRadius:6,cursor:"pointer"}}>Pas de date pour l'instant</button>
-      </div>
-    )},
-    {e:"🚀",t:"TOUT EST\nPRÊT",s:`Bienvenue ${data.name||"artiste"} — ton dashboard est personnalisé.`,c:null},
+    {e:"🎵",t:"BIENVENUE\nCHEZ INDY",s:"Le coach de poche de l'artiste indépendant",c:null},
+    {e:"🎤",t:"TON NOM\nD'ARTISTE",s:"Comment tu t'appelles ?",c:<input value={name} onChange={e=>setName(e.target.value)} placeholder="Saya, TiF, Mon Artiste…" style={{fontSize:15,padding:16,textAlign:"center"}}/>},
+    {e:"🎛️",t:"TON GENRE\nMUSICAL",s:"Afro Pop, R&B, Trap FR…",c:<input value={genre} onChange={e=>setGenre(e.target.value)} placeholder="Afro Pop, R&B FR, Drill…" style={{fontSize:15,padding:16,textAlign:"center"}}/>},
+    {e:"🚀",t:"TOUT EST\nPRÊT",s:`Bienvenue ${name||"artiste"} — c'est parti.`,c:null},
   ];
-
   const s=steps[step];
-  const ok=(
-    step===0||step===7||
-    (step===1&&data.name.trim())||
-    (step===2&&data.genre.trim())||
-    (step===3&&data.role)||
-    (step===4&&data.niveau)||
-    (step===5&&data.objectif)||
-    step===6
-  );
-
+  const ok=step===0||step===3||(step===1&&name.trim())||(step===2&&genre.trim());
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",display:"flex",flexDirection:"column"}}>
       <div style={{display:"flex",gap:4,padding:"20px 24px 0"}}>
         {steps.map((_,i)=><div key={i} style={{flex:1,height:2,borderRadius:1,background:i<=step?"#FF6B35":"#111",transition:"background 0.3s"}}/>)}
       </div>
-      <div className="fu" style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",padding:"32px 28px 20px",gap:20}}>
-        <div style={{fontSize:48}}>{s.e}</div>
-        <div style={{textAlign:"center",width:"100%"}}>
-          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:30,letterSpacing:4,lineHeight:1.1,whiteSpace:"pre-line"}}>{s.t}</div>
-          <div style={{fontSize:12,color:"#555",marginTop:8,lineHeight:1.6}}>{s.s}</div>
+      <div className="fu" style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 28px",gap:24}}>
+        <div style={{fontSize:52}}>{s.e}</div>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:34,letterSpacing:4,lineHeight:1.1,whiteSpace:"pre-line"}}>{s.t}</div>
+          <div style={{fontSize:12,color:"#555",marginTop:10,lineHeight:1.6}}>{s.s}</div>
         </div>
-        {s.c&&<div style={{width:"100%",maxWidth:400}}>{s.c}</div>}
+        {s.c&&<div style={{width:"100%"}}>{s.c}</div>}
       </div>
       <div style={{padding:"0 24px 40px",display:"flex",flexDirection:"column",gap:10}}>
-        <button className="btn" disabled={!ok} onClick={()=>step<steps.length-1?setStep(step+1):onDone({name:data.name,genre:data.genre,role:data.role,niveau:data.niveau,objectif:data.objectif,sortie_estimee:data.sortie})}>
-          {step===steps.length-1?"Sois INDY →":"Continuer →"}
-        </button>
+        <button className="btn" disabled={!ok} onClick={()=>step<steps.length-1?setStep(step+1):onDone({name,genre})}>{step===steps.length-1?"Sois INDY →":"Continuer →"}</button>
         {step>0&&<button className="btn-o" style={{width:"100%"}} onClick={()=>setStep(step-1)}>← Retour</button>}
       </div>
     </div>
@@ -827,193 +798,19 @@ function HowItWorks({empty=false, onGoCoach, plan}){
   );
 }
 
-// ─── DAILY COACH WIDGET — conseil IA personnalisé du jour ────────────────────
-// Génère un conseil ciblé selon le profil, les projets en cours, et l'objectif.
-// Résultat mis en cache localStorage (expire après 24h) pour éviter le spam API.
-// ─── RECOMMANDATIONS PERSONNALISÉES ──────────────────────────────────────────
-// Génère des recommandations immédiates basées sur le profil onboarding.
-// Affiché en haut du dashboard quand l'utilisateur a un objectif défini.
-function PersonalizedRecs({user,projects,plan,onGoCoach,onGoView}){
-  const obj=user?.objectif;
-  const niveau=user?.niveau;
-  const hasProjects=projects.length>0;
-  const firstProj=projects[0];
-
-  // Règles de recommandation selon objectif + niveau + état des projets
-  const getRecs=()=>{
-    const recs=[];
-
-    if(obj==="sortie"||!obj){
-      if(!hasProjects){
-        recs.push({icon:"🎵",color:"#FF6B35",titre:"Crée ton premier titre",desc:"Démarre ton parcours en ajoutant un titre sur le Dashboard.",cta:"Ajouter un titre",action:()=>onGoCoach(null)});
-      } else {
-        const g=firstProj?Math.round(Object.values(firstProj.progress||{}).reduce((a,b)=>a+b,0)/(Object.keys(firstProj.progress||{}).length||1)):0;
-        if(g<30){
-          recs.push({icon:"🎛️",color:"#FF6B35",titre:"Finalise ta production",desc:`"${firstProj?.titre}" est à ${g}% — priorité : mix et master aux normes streaming.`,cta:"Ouvrir le Coach",action:()=>onGoCoach(firstProj?.id)});
-        } else if(g<60){
-          recs.push({icon:"🔐",color:"#00C9A7",titre:"Protège tes droits",desc:"Dépose à la SACEM AVANT de distribuer. Ne passe pas cette étape.",cta:"Voir Protection",action:()=>onGoCoach(firstProj?.id)});
-        } else if(g<80){
-          recs.push({icon:"🚀",color:"#845EF7",titre:"Lance la distribution",desc:`Choisis ton distributeur et pitch Spotify 7 semaines avant la sortie.`,cta:"Voir Distribution",action:()=>onGoCoach(firstProj?.id)});
-        } else {
-          recs.push({icon:"📣",color:"#FFD43B",titre:"Prépare ta campagne promo",desc:"Génère ton Release Plan pour organiser les 30 jours avant ta sortie.",cta:"Release Plan →",action:()=>onGoView("releaseplan")});
-        }
-      }
-    }
-
-    if(obj==="live"){
-      recs.push({icon:"🏛️",color:"#20C997",titre:"Cible tes premières salles",desc:"Commence par les SMAC 100–300 pers. Pitcher par email avec EPK.",cta:"Voir l'Annuaire",action:()=>onGoView("annuaire")});
-      recs.push({icon:"📩",color:"#20C997",titre:"Génère ton email de booking",desc:"Un email percutant avec ton EPK en premier lien. On te le rédige.",cta:"Module Booking",action:()=>onGoView("booking")});
-    }
-
-    if(obj==="financement"){
-      recs.push({icon:"💰",color:"#F03E3E",titre:"Trouve tes aides éligibles",desc:"CNM, SACEM, ADAMI, DRAC — 4 questions pour identifier tes aides.",cta:"Matching subventions",action:()=>onGoView("subventions")});
-    }
-
-    if(obj==="distribution"){
-      recs.push({icon:"🤖",color:"#845EF7",titre:"Outils IA pour artistes",desc:"Bio, pitch Spotify, idées contenu, stratégie sortie — 7 générateurs IA.",cta:"IA Tools Hub",action:()=>onGoView("iatools")});
-    }
-
-    // Reco générique niveau débutant
-    if(niveau==="debut"&&recs.length<2){
-      recs.push({icon:"📚",color:"#C8A96E",titre:"Consulte la bibliothèque",desc:"Contrats, split sheet, guide SACEM, checklist sortie — tout ce qu'il te faut.",cta:"Voir les docs",action:()=>onGoView("bibliotheque")});
-    }
-
-    // Reco tracker si abonné et pas encore utilisé
-    if(plan!=="free"&&recs.length<2){
-      recs.push({icon:"📊",color:"#845EF7",titre:"Suis ta progression",desc:"Renseigne tes streams et followers pour voir ton momentum évoluer.",cta:"Streaming Tracker",action:()=>onGoView("tracker")});
-    }
-
-    return recs.slice(0,2); // max 2 recommandations visibles
-  };
-
-  const recs=getRecs();
-  if(!recs.length)return null;
-
-  return(
-    <div style={{margin:"14px 18px 0"}}>
-      <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-        <span style={{color:"#FF6B35"}}>◆</span>
-        {obj?"PRIORITÉS SELON TON OBJECTIF":"PROCHAINES ÉTAPES RECOMMANDÉES"}
-        {user?.name&&<span style={{color:"#333"}}>· {user.name.toUpperCase()}</span>}
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {recs.map((r,i)=>(
-          <div key={i} className="fu" style={{background:"#0D0D0D",border:`1px solid ${r.color}22`,borderRadius:10,padding:"12px 14px",display:"flex",gap:12,alignItems:"center",animationDelay:`${i*0.06}s`,position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:r.color,borderRadius:"3px 0 0 3px"}}/>
-            <div style={{width:36,height:36,borderRadius:9,background:`${r.color}15`,border:`1px solid ${r.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>{r.icon}</div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:11,color:"#DDD",fontWeight:600,marginBottom:2}}>{r.titre}</div>
-              <div style={{fontSize:10,color:"#555",lineHeight:1.4}}>{r.desc}</div>
-            </div>
-            <button onClick={r.action} style={{background:r.color,border:"none",color:plan==="free"&&r.color==="#F03E3E"?"#FFF":"#000",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,fontWeight:700,padding:"7px 10px",borderRadius:7,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",lineHeight:1.3,textAlign:"center"}}>{r.cta}</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── DAILY COACH WIDGET — conseil IA personnalisé du jour ────────────────────
-function DailyCoachWidget({plan,user,projects,onGoPlan}){
-  const [conseil,setConseil]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const [open,setOpen]=useState(false);
-  const CACHE_KEY="indy_daily_coach_v1";
-
-  useEffect(()=>{
-    try{
-      const raw=localStorage.getItem(CACHE_KEY);
-      if(raw){
-        const {text,date}=JSON.parse(raw);
-        if((Date.now()-date)/3600000<22)setConseil(text);
-      }
-    }catch{}
-  },[]);
-
-  const gen=async()=>{
-    if(plan==="free"){setOpen(true);return;}
-    setLoading(true);
-    const proj=projects[0];
-    const g=proj?Math.round(Object.values(proj.progress||{}).reduce((a,b)=>a+b,0)/(Object.keys(proj.progress||{}).length||1)):0;
-    const userCtx=`Artiste : ${user?.name||"artiste"} · Genre : ${user?.genre||"indé"} · Niveau : ${user?.niveau||""} · Objectif principal : ${user?.objectif||"sortie"} · Rôle : ${user?.role||"artiste"}.`;
-    const projCtx=proj?`Projet : "${proj.titre}" · ${g}% · Étape : ${proj.stage||"création"} · Sortie : ${proj.sortie||"non définie"}.`:"Aucun projet créé.";
-    const prompt=`${userCtx}\n${projCtx}\n\nDonne UN conseil concret et actionnable pour aujourd'hui (3-4 phrases max). Commence par l'action. Pas d'intro. Tutoie-moi. Précis, motivant, direct.`;
-    try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:COACH_SYS,messages:[{role:"user",content:prompt}],maxTokens:300})});
-      const json=await res.json();
-      const text=json.content?.map(b=>b.text||"").join("")||"Continue ton parcours — chaque jour compte.";
-      setConseil(text);
-      try{localStorage.setItem(CACHE_KEY,JSON.stringify({text,date:Date.now()}));}catch{}
-    }catch{setConseil("Continue ton parcours — chaque jour compte.");}
-    setLoading(false);
-  };
-
-  const today=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
-
-  return(
-    <div style={{margin:"14px 18px 0",background:"linear-gradient(135deg,#0D0D0D,#0A0A0A)",border:"1px solid #FF6B3522",borderRadius:12,overflow:"hidden",position:"relative"}}>
-      <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#FF6B35,#845EF7)"}}/>
-      <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:36,height:36,borderRadius:9,background:"#FF6B3515",border:"1px solid #FF6B3533",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⚡</div>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:9,color:"#FF6B35",letterSpacing:2,fontWeight:600}}>CONSEIL DU JOUR</div>
-          <div style={{fontSize:10,color:"#555",marginTop:1}}>{today}</div>
-        </div>
-        {!conseil&&!loading&&(
-          <button onClick={gen} style={{background:"#FF6B35",border:"none",color:"#000",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1.5,fontWeight:700,padding:"8px 12px",borderRadius:8,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-            {plan==="free"?"🔒 VOIR":"GÉNÉRER"}
-          </button>
-        )}
-        {conseil&&!loading&&(
-          <button onClick={()=>{setConseil(null);try{localStorage.removeItem(CACHE_KEY);}catch{}}} style={{background:"none",border:"1px solid #1A1A1A",color:"#444",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"6px 10px",borderRadius:6,cursor:"pointer",flexShrink:0}}>↺</button>
-        )}
-      </div>
-      {loading&&<div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:8,borderTop:"1px solid #0F0F0F"}}><Equalizer color="#FF6B35" bars={3} height={11}/><span style={{fontSize:11,color:"#888"}}>Le coach réfléchit…</span></div>}
-      {conseil&&!loading&&(
-        <div className="fu" style={{padding:"0 16px 14px",borderTop:"1px solid #0F0F0F"}}>
-          <div style={{fontSize:12,color:"#CCC",lineHeight:1.7,marginTop:10,whiteSpace:"pre-wrap"}}>{conseil}</div>
-        </div>
-      )}
-      {open&&(
-        <div style={{padding:"0 16px 14px",borderTop:"1px solid #0F0F0F"}}>
-          <div style={{fontSize:11,color:"#555",lineHeight:1.6,marginTop:10}}>🔒 Le conseil du jour est réservé aux abonnés.</div>
-          <button className="btn" style={{marginTop:10,background:"#FF6B35",color:"#000"}} onClick={onGoPlan}>S'abonner — 9,90€/mois →</button>
-          <button onClick={()=>setOpen(false)} style={{background:"none",border:"none",color:"#444",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1,padding:"8px 0 0",cursor:"pointer",display:"block"}}>Fermer</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
-function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user,onGoView}){
+function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user}){
   const [edit,setEdit]=useState(null);
   const [isNew,setIsNew]=useState(false);
   const [filterArtist,setFilterArtist]=useState(null);
   const urgent=projects.filter(p=>{const d=daysUntil(p.sortie);return d!==null&&d<=14&&d>=0;});
   const total=projects.length?Math.round(projects.reduce((a,p)=>a+gp(p.progress),0)/projects.length):0;
-  const maxP=plan==="free"?2:plan==="artiste"?5:Infinity;
+  const maxP=plan==="free"?2:plan==="artiste"?5:Infinity; // free:2 titres, artiste:5, label:illimité
   const save=(u)=>{if(isNew)setProjects(ps=>[...ps,{...u,id:crypto.randomUUID?crypto.randomUUID():""+Date.now(),checks:{}}]);else setProjects(ps=>ps.map(p=>p.id===u.id?u:p));setEdit(null);setIsNew(false);};
   const del=(id)=>{setProjects(ps=>ps.filter(p=>p.id!==id));setEdit(null);};
-
-  // Badge profil enrichi : affiche le niveau/objectif si renseigné
-  const profileBadge=user?.objectif||user?.niveau;
-  const OBJECTIF_LABELS={sortie:"🎵 Préparer une sortie",live:"🎤 Décrocher des dates",financement:"💰 Trouver des aides",distribution:"🚀 Mieux distribuer"};
-  const NIVEAU_LABELS={debut:"🌱 Débutant",dev:"🚀 En développement",confirme:"⭐ Confirmé",pro:"🏆 Pro"};
-
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
       <Hdr sub={user?.name?`BONJOUR ${user.name.toUpperCase()}`:"TABLEAU DE BORD"} right={<div style={{textAlign:"right"}}><div style={{fontSize:22,fontFamily:"'Bebas Neue',sans-serif"}}>{total}<span style={{color:"#222",fontSize:12}}>%</span></div><div style={{fontSize:9,color:"#555",letterSpacing:1}}>GLOBAL</div></div>}/>
-
-      {/* Bandeau profil enrichi — visible si niveau ou objectif défini */}
-      {profileBadge&&(
-        <div style={{padding:"8px 18px",borderBottom:"1px solid #0F0F0F",display:"flex",gap:8,alignItems:"center",overflowX:"auto",scrollbarWidth:"none"}}>
-          {user?.niveau&&<span className="pill" style={{background:"#FF6B3512",color:"#FF6B35",border:"1px solid #FF6B3522",flexShrink:0}}>{NIVEAU_LABELS[user.niveau]||user.niveau}</span>}
-          {user?.objectif&&<span className="pill" style={{background:"#845EF712",color:"#845EF7",border:"1px solid #845EF722",flexShrink:0}}>{OBJECTIF_LABELS[user.objectif]||user.objectif}</span>}
-          {user?.genre&&<span className="pill" style={{background:"#00C9A712",color:"#00C9A7",border:"1px solid #00C9A722",flexShrink:0}}>🎶 {user.genre}</span>}
-        </div>
-      )}
-
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderBottom:"1px solid #111"}}>
         {[{l:"Titres",v:projects.length},{l:"En cours",v:projects.filter(p=>{const g=gp(p.progress);return g>0&&g<100;}).length},{l:"Prêts",v:projects.filter(p=>gp(p.progress)===100).length},{l:"Urgents",v:urgent.length,red:true}].map((s,i)=>(
           <div key={i} style={{padding:"11px 0",textAlign:"center",borderRight:i<3?"1px solid #111":"none"}}>
@@ -1023,15 +820,9 @@ function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user,onGoView})
         ))}
       </div>
 
-      {/* Recommandations personnalisées — au-dessus de HowItWorks */}
-      <PersonalizedRecs user={user} projects={projects} plan={plan} onGoCoach={onGoCoach} onGoView={onGoView}/>
-
-      {/* MODULE VISUEL */}
+      {/* ── MODULE VISUEL : Comment INDY t'accompagne ───────────────────────── */}
+      {/* Affiché toujours, mais en mode "découverte" élargi quand 0 projet */}
       <HowItWorks empty={projects.length===0} onGoCoach={onGoCoach} plan={plan}/>
-
-      {/* Daily Coach */}
-      <DailyCoachWidget plan={plan} user={user} projects={projects} onGoPlan={onGoPlan}/>
-
       {projects.length>0&&(
         <div style={{padding:"12px 18px 0"}}>
           <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:8}}>◆ AVANCEMENT PAR ÉTAPE</div>
@@ -1053,6 +844,7 @@ function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user,onGoView})
         </div>
       )}
       {urgent.length>0&&<div style={{margin:"14px 18px 0",background:"#0E0808",border:"1px solid #F03E3E22",borderRadius:8,padding:"11px 14px"}}><div style={{fontSize:9,color:"#F03E3E",letterSpacing:2,marginBottom:7}}>⚡ SORTIES IMMINENTES</div>{urgent.map(p=><div key={p.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#666",padding:"3px 0"}}><span>{p.titre} <span style={{color:"#888"}}>· {p.artiste}</span></span><span style={{color:"#F03E3E"}}>J-{daysUntil(p.sortie)}</span></div>)}</div>}
+      {/* Filtre par artiste pour les labels */}
       {plan==="label"&&projects.length>0&&(()=>{
         const artists=[...new Set(projects.map(p=>p.artiste).filter(Boolean))];
         return artists.length>1?(
@@ -1118,588 +910,6 @@ function Dashboard({projects,setProjects,onGoCoach,onGoPlan,plan,user,onGoView})
               {!isNew&&<button className="btn-o" style={{width:"100%",color:"#F03E3E44",borderColor:"#F03E3E22"}} onClick={()=>{if(window.confirm("Supprimer ce titre ?"))del(edit.id);}}>Supprimer</button>}
               <button className="btn-o" style={{width:"100%"}} onClick={()=>setEdit(null)}>Annuler</button>
             </div>
-          </div>
-        </div></div>
-      )}
-    </div>
-  );
-}
-
-// ─── STREAMING TRACKER ───────────────────────────────────────────────────────
-// Saisie manuelle des stats. Stocké dans localStorage. Graphe d'évolution.
-// Momentum score calculé selon la tendance sur les 3 dernières saisies.
-function StreamingTracker({plan,onGoPlan,onBack}){
-  const STORE_KEY="indy_streaming_v1";
-  const [entries,setEntries]=useState(()=>{
-    try{return JSON.parse(localStorage.getItem(STORE_KEY)||"[]");}
-    catch{return [];}
-  });
-  const [form,setForm]=useState({date:new Date().toISOString().slice(0,10),listeners:"",streams:"",ig:"",tiktok:""});
-  const [showForm,setShowForm]=useState(false);
-  const [activeMetric,setActiveMetric]=useState("listeners");
-
-  useEffect(()=>{
-    try{localStorage.setItem(STORE_KEY,JSON.stringify(entries));}catch{}
-  },[entries]);
-
-  const save=()=>{
-    if(!form.listeners&&!form.streams)return;
-    const entry={...form,id:Date.now(),listeners:Number(form.listeners)||0,streams:Number(form.streams)||0,ig:Number(form.ig)||0,tiktok:Number(form.tiktok)||0};
-    const updated=[...entries,entry].sort((a,b)=>new Date(a.date)-new Date(b.date));
-    setEntries(updated);
-    setForm({date:new Date().toISOString().slice(0,10),listeners:"",streams:"",ig:"",tiktok:""});
-    setShowForm(false);
-  };
-
-  // Momentum score: compare dernière vs avant-dernière valeur de la métrique active
-  const getMomentum=()=>{
-    if(entries.length<2)return null;
-    const last=entries[entries.length-1][activeMetric];
-    const prev=entries[entries.length-2][activeMetric];
-    if(!prev)return null;
-    return Math.round(((last-prev)/prev)*100);
-  };
-  const momentum=getMomentum();
-
-  // Générer insight IA (premium uniquement)
-  const [insight,setInsight]=useState(null);
-  const [insightLoad,setInsightLoad]=useState(false);
-  const genInsight=async()=>{
-    if(plan==="free")return;
-    setInsightLoad(true);
-    const recent=entries.slice(-5);
-    const dataStr=recent.map(e=>`${e.date}: ${e.listeners} auditeurs, ${e.streams} streams, ${e.ig} followers IG, ${e.tiktok} followers TikTok`).join("\n");
-    try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:COACH_SYS,messages:[{role:"user",content:`Voici mes stats de streaming/réseaux sur les dernières semaines :\n${dataStr}\n\nDonne-moi 2 insights concrets et actionnables sur mes tendances. 3 phrases max, direct, tutoie-moi.`}],maxTokens:250})});
-      const json=await res.json();
-      setInsight(json.content?.map(b=>b.text||"").join("")||"");
-    }catch{setInsight("Erreur de connexion.");}
-    setInsightLoad(false);
-  };
-
-  const METRICS=[
-    {k:"listeners",l:"Auditeurs",c:"#1DB954",u:""},
-    {k:"streams",l:"Streams",c:"#845EF7",u:""},
-    {k:"ig",l:"Followers IG",c:"#F783AC",u:""},
-    {k:"tiktok",l:"TikTok",c:"#74C0FC",u:""},
-  ];
-
-  // Données graphe simple (barres ASCII-style en CSS)
-  const graphData=entries.slice(-10).map(e=>({date:e.date.slice(5),val:e[activeMetric]||0}));
-  const maxVal=Math.max(...graphData.map(e=>e.val),1);
-  const curMetric=METRICS.find(m=>m.k===activeMetric);
-
-  if(plan==="free")return(
-    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="STREAMING TRACKER" accent="#1DB954" onBack={onBack}/>
-      <div style={{padding:"30px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
-        <div style={{fontSize:48}}>📊</div>
-        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:3}}>SUIVI DE PERFORMANCE</div>
-        <div style={{fontSize:12,color:"#555",lineHeight:1.7,maxWidth:280}}>Suis tes streams, auditeurs, followers Instagram et TikTok. Visualise ta progression, ton momentum et reçois des insights IA.</div>
-        <div style={{background:"#0D0D0D",border:"1px solid #1A1A1A",borderRadius:10,padding:"14px 16px",width:"100%",maxWidth:320}}>
-          {[["📈 Graphe d'évolution","#1DB954"],["⚡ Momentum score","#845EF7"],["🤖 Insights IA personnalisés","#FF6B35"],["💾 Historique illimité","#FFD43B"]].map(([f,c])=>(
-            <div key={f} style={{display:"flex",gap:8,fontSize:11,color:"#666",padding:"5px 0",alignItems:"center"}}><span style={{color:c}}>✓</span>{f}</div>
-          ))}
-        </div>
-        <button className="btn" style={{maxWidth:300,width:"100%"}} onClick={onGoPlan}>Débloquer — 9,90€/mois →</button>
-      </div>
-    </div>
-  );
-
-  return(
-    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="STREAMING TRACKER" accent="#1DB954" onBack={onBack}/>
-
-      {/* Sélecteur de métrique */}
-      <div style={{display:"flex",gap:0,borderBottom:"1px solid #111"}}>
-        {METRICS.map(m=>(
-          <button key={m.k} onClick={()=>setActiveMetric(m.k)} style={{flex:1,background:activeMetric===m.k?`${m.c}12`:"none",border:"none",borderBottom:`2px solid ${activeMetric===m.k?m.c:"transparent"}`,color:activeMetric===m.k?m.c:"#555",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"11px 4px",cursor:"pointer",textTransform:"uppercase",transition:"all 0.2s"}}>{m.l}</button>
-        ))}
-      </div>
-
-      {/* Stats résumé */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderBottom:"1px solid #111"}}>
-        <div style={{padding:"14px 0",textAlign:"center",borderRight:"1px solid #111"}}>
-          <div style={{fontSize:26,fontFamily:"'Bebas Neue',sans-serif",color:curMetric?.c}}>
-            {entries.length>0?(entries[entries.length-1][activeMetric]||0).toLocaleString("fr-FR"):"—"}
-          </div>
-          <div style={{fontSize:9,color:"#555",letterSpacing:1}}>DERNIÈRE SAISIE</div>
-        </div>
-        <div style={{padding:"14px 0",textAlign:"center"}}>
-          <div style={{fontSize:26,fontFamily:"'Bebas Neue',sans-serif",color:momentum===null?"#555":momentum>=0?"#00C9A7":"#F03E3E"}}>
-            {momentum===null?"—":`${momentum>=0?"+":""}${momentum}%`}
-          </div>
-          <div style={{fontSize:9,color:"#555",letterSpacing:1}}>MOMENTUM</div>
-        </div>
-      </div>
-
-      {/* Graphe */}
-      {entries.length>0?(
-        <div style={{padding:"16px 18px"}}>
-          <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:12}}>◆ ÉVOLUTION — {curMetric?.l.toUpperCase()}</div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:4,height:80,overflowX:"auto",scrollbarWidth:"none"}}>
-            {graphData.map((d,i)=>(
-              <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,flexShrink:0,minWidth:28}}>
-                <div style={{width:"100%",background:`${curMetric?.c}33`,borderRadius:"3px 3px 0 0",height:Math.max(4,Math.round((d.val/maxVal)*70)),transition:"height 0.4s"}}/>
-                <div style={{width:"100%",height:3,background:curMetric?.c,borderRadius:1}}/>
-                <div style={{fontSize:7,color:"#444",whiteSpace:"nowrap"}}>{d.date}</div>
-              </div>
-            ))}
-          </div>
-          {/* Insight IA */}
-          {!insight&&!insightLoad&&(
-            <button onClick={genInsight} style={{marginTop:12,width:"100%",background:"#0D0D0D",border:"1px solid #845EF733",color:"#845EF7",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",borderRadius:8,cursor:"pointer"}}>🤖 Analyser avec l'IA →</button>
-          )}
-          {insightLoad&&<div style={{marginTop:12,display:"flex",alignItems:"center",gap:8,fontSize:11,color:"#888"}}><Equalizer color="#845EF7" bars={3} height={10}/>Analyse en cours…</div>}
-          {insight&&(
-            <div className="fu" style={{marginTop:12,background:"#0D0D0D",border:"1px solid #845EF733",borderRadius:8,padding:"12px 14px"}}>
-              <div style={{fontSize:9,color:"#845EF7",letterSpacing:2,marginBottom:6}}>🤖 INSIGHT IA</div>
-              <div style={{fontSize:11,color:"#CCC",lineHeight:1.7}}>{insight}</div>
-              <button onClick={()=>setInsight(null)} style={{background:"none",border:"none",color:"#444",fontSize:10,letterSpacing:1,padding:"8px 0 0",cursor:"pointer"}}>Fermer</button>
-            </div>
-          )}
-        </div>
-      ):(
-        <div style={{padding:"40px 24px",textAlign:"center"}}>
-          <div style={{fontSize:40}}>📊</div>
-          <div style={{fontSize:14,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,marginTop:12,marginBottom:8}}>AUCUNE DONNÉE</div>
-          <div style={{fontSize:11,color:"#555",lineHeight:1.6}}>Ajoute ta première saisie pour commencer à suivre ta progression.</div>
-        </div>
-      )}
-
-      {/* Historique */}
-      {entries.length>0&&(
-        <div style={{padding:"0 18px 16px"}}>
-          <div style={{fontSize:9,color:"#555",letterSpacing:2,marginBottom:10}}>◆ HISTORIQUE</div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {entries.slice(-8).reverse().map((e,i)=>(
-              <div key={e.id} className="fu" style={{background:"#0D0D0D",border:"1px solid #141414",borderRadius:8,padding:"10px 14px",animationDelay:`${i*0.04}s`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                  <span style={{fontSize:10,color:"#555"}}>{new Date(e.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}</span>
-                  <button onClick={()=>setEntries(prev=>prev.filter(x=>x.id!==e.id))} style={{background:"none",border:"none",color:"#2A2A2A",cursor:"pointer",fontSize:11,padding:0}}>✕</button>
-                </div>
-                <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
-                  {METRICS.map(m=>e[m.k]>0&&(
-                    <div key={m.k} style={{display:"flex",gap:4,alignItems:"center"}}>
-                      <span style={{fontSize:9,color:m.c,letterSpacing:1}}>{m.l.slice(0,4).toUpperCase()}</span>
-                      <span style={{fontSize:12,color:"#AAA",fontWeight:600}}>{e[m.k].toLocaleString("fr-FR")}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Formulaire ajout */}
-      {showForm?(
-        <div className="panel"><div className="pin" style={{borderTopColor:"#1DB954"}}>
-          <div style={{padding:"16px 20px",borderBottom:"1px solid #111",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{fontSize:9,color:"#1DB954",letterSpacing:2}}>NOUVELLE SAISIE</div>
-            <button onClick={()=>setShowForm(false)} style={{background:"none",border:"none",color:"#999",fontSize:20,cursor:"pointer"}}>✕</button>
-          </div>
-          <div style={{padding:"18px 20px 40px",display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',sans-serif"}}>
-            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>DATE</label><input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <div><label style={{fontSize:11,color:"#1DB954",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>AUDITEURS MENSUELS</label><input type="number" value={form.listeners} onChange={e=>setForm(f=>({...f,listeners:e.target.value}))} placeholder="50000"/></div>
-              <div><label style={{fontSize:11,color:"#845EF7",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>STREAMS TITRE</label><input type="number" value={form.streams} onChange={e=>setForm(f=>({...f,streams:e.target.value}))} placeholder="12000"/></div>
-              <div><label style={{fontSize:11,color:"#F783AC",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>FOLLOWERS IG</label><input type="number" value={form.ig} onChange={e=>setForm(f=>({...f,ig:e.target.value}))} placeholder="3500"/></div>
-              <div><label style={{fontSize:11,color:"#74C0FC",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>FOLLOWERS TIKTOK</label><input type="number" value={form.tiktok} onChange={e=>setForm(f=>({...f,tiktok:e.target.value}))} placeholder="8000"/></div>
-            </div>
-            <button className="btn" style={{background:"#1DB954",color:"#000",marginTop:8}} disabled={!form.listeners&&!form.streams} onClick={save}>Enregistrer →</button>
-          </div>
-        </div></div>
-      ):(
-        <div style={{padding:"0 18px 20px"}}>
-          <button onClick={()=>setShowForm(true)} style={{width:"100%",background:"#0D0D0D",border:"1px dashed #1DB95433",color:"#1DB954",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:2,padding:14,borderRadius:10,cursor:"pointer"}}>+ AJOUTER UNE SAISIE</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-// ─── RELEASE PLAN GENERATOR ──────────────────────────────────────────────────
-// Timeline dynamique J-30 → J+7 depuis une date de sortie.
-// Génère un plan personnalisé avec genre + contexte artiste.
-function ReleasePlan({plan,user,projects,onGoPlan,onBack}){
-  const [phase,setPhase]=useState("form"); // form | loading | result
-  const [form,setForm]=useState({titre:"",genre:user?.genre||"",sortie:"",plateforme:"Spotify, Apple Music, Deezer"});
-  const [planData,setPlanData]=useState(null);
-
-  // Pré-remplir depuis le premier projet
-  useEffect(()=>{
-    if(projects.length>0&&!form.titre){
-      const p=projects[0];
-      setForm(f=>({...f,titre:p.titre||"",genre:p.genre||user?.genre||""}));
-    }
-  },[]);
-
-  const TIMELINE_DEFAULT=[
-    {j:-30,label:"J-30",icon:"🎨",cat:"Identité",action:"Finaliser l'identité visuelle : artwork, palette couleurs, direction artistique"},
-    {j:-21,label:"J-21",icon:"📱",cat:"Teaser",action:"Publier le premier teaser (30 sec extrait ou making-of)"},
-    {j:-14,label:"J-14",icon:"🎧",cat:"Pitch",action:"Envoyer le pitch éditorial Spotify (obligatoire 7 sem à l'avance)"},
-    {j:-10,label:"J-10",icon:"🔗",cat:"Pre-save",action:"Créer et lancer le pre-save (Hypeddit, SubmitHub, Toneden)"},
-    {j:-7,label:"J-7",icon:"🎬",cat:"Contenu",action:"Publier backstage + vidéo courte sur TikTok/Reels"},
-    {j:-3,label:"J-3",icon:"📣",cat:"Rappel",action:"Story compte à rebours + republication du teaser"},
-    {j:0,label:"Jour J",icon:"🚀",cat:"Sortie",action:"SORTIE — post sortie sur tous les réseaux + stories + notification communauté"},
-    {j:3,label:"J+3",icon:"📊",cat:"Relance",action:"Partager les premières stats + relancer avec contenu réaction"},
-    {j:7,label:"J+7",icon:"🎁",cat:"Bonus",action:"Contenu bonus exclusif : lyric video, derrière le micro, remix ou instrumental"},
-  ];
-
-  const gen=async()=>{
-    if(plan==="free"){setPhase("locked");return;}
-    if(!form.sortie||!form.titre){return;}
-    setPhase("loading");
-    const prompt=`Crée un plan de sortie personnalisé pour :\n- Titre : "${form.titre}"\n- Genre : ${form.genre}\n- Artiste : ${user?.name||"artiste indépendant"}\n- Date de sortie : ${form.sortie}\n- Plateformes : ${form.plateforme}\n\nGénère un plan de 9 étapes de J-30 à J+7 au format JSON, sans markdown ni backticks.\nFormat exact : [{"j":-30,"label":"J-30","icon":"🎨","cat":"Catégorie","action":"Action concrète spécifique à ce genre musical"},...].\nRends chaque action très concrète, spécifique au genre ${form.genre}, et actionnables aujourd'hui. Inclus des exemples de contenu précis.`;
-    try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:"Tu es expert marketing musical pour artistes indépendants français. Réponds UNIQUEMENT en JSON valide, sans texte autour.",messages:[{role:"user",content:prompt}],maxTokens:1500})});
-      const json=await res.json();
-      const text=json.content?.map(b=>b.type==="text"?b.text:"").join("")||"[]";
-      const clean=text.replace(/```json|```/g,"").trim();
-      try{
-        const parsed=JSON.parse(clean);
-        setPlanData(parsed.length?parsed:TIMELINE_DEFAULT);
-      }catch{setPlanData(TIMELINE_DEFAULT);}
-    }catch{setPlanData(TIMELINE_DEFAULT);}
-    setPhase("result");
-  };
-
-  const getSortieDate=()=>form.sortie?new Date(form.sortie):null;
-  const getJDate=(j)=>{
-    const d=getSortieDate();
-    if(!d)return "";
-    const r=new Date(d);r.setDate(r.getDate()+j);
-    return r.toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
-  };
-
-  const [checks,setChecks]=useState({});
-
-  if(phase==="locked")return(
-    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="RELEASE PLAN" accent="#FFD43B" onBack={onBack}/>
-      <div style={{padding:"30px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
-        <div style={{fontSize:48}}>🔒</div>
-        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:3}}>RÉSERVÉ AUX ABONNÉS</div>
-        <div style={{fontSize:12,color:"#555",lineHeight:1.7,maxWidth:280}}>Génère une timeline complète J-30 → J+7 personnalisée pour ton genre et ton artiste.</div>
-        <button className="btn" style={{maxWidth:300,width:"100%",background:"#FFD43B",color:"#000"}} onClick={onGoPlan}>S'abonner — 9,90€/mois →</button>
-        <button className="btn-o" style={{maxWidth:300,width:"100%"}} onClick={()=>setPhase("form")}>← Retour</button>
-      </div>
-    </div>
-  );
-
-  return(
-    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="RELEASE PLAN" accent="#FFD43B" onBack={phase==="result"?()=>setPhase("form"):onBack} right={phase==="result"&&<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>{setPhase("form");setPlanData(null);setChecks({});}}>↺ Nouveau</button>}/>
-
-      {phase==="form"&&(
-        <div style={{padding:"18px 18px 40px",display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',sans-serif"}}>
-          <div style={{background:"#0D0D0D",border:"1px solid #FFD43B22",borderRadius:10,padding:"13px 16px",display:"flex",gap:10,alignItems:"flex-start"}}>
-            <span style={{fontSize:20}}>📅</span>
-            <div><div style={{fontSize:11,color:"#FFD43B",fontWeight:600,marginBottom:2}}>Release Plan personnalisé</div><div style={{fontSize:11,color:"#666",lineHeight:1.5}}>Une timeline J-30 → J+7 générée par IA selon ton genre et ta date de sortie.</div></div>
-          </div>
-
-          {projects.length>0&&(
-            <div>
-              <div style={{fontSize:9,color:"#888",letterSpacing:2,marginBottom:8}}>CHOISIR UN TITRE</div>
-              <div style={{display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none"}}>
-                {projects.map(p=>(
-                  <button key={p.id} onClick={()=>setForm(f=>({...f,titre:p.titre,genre:p.genre,sortie:p.sortie||""}))} style={{background:`${p.color}12`,border:`1px solid ${p.color}33`,color:"#888",fontFamily:"'Inter',sans-serif",fontSize:10,padding:"5px 11px",borderRadius:20,cursor:"pointer",flexShrink:0}}>🎵 {p.titre}</button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>TITRE *</label><input value={form.titre} onChange={e=>setForm(f=>({...f,titre:e.target.value}))} placeholder="Nom de ton titre…"/></div>
-          <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>GENRE *</label><input value={form.genre} onChange={e=>setForm(f=>({...f,genre:e.target.value}))} placeholder="Afro Pop, R&B, Drill…"/></div>
-          <div><label style={{fontSize:11,color:"#FFD43B",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>DATE DE SORTIE *</label><input type="date" value={form.sortie} onChange={e=>setForm(f=>({...f,sortie:e.target.value}))}/></div>
-          <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>PLATEFORMES</label><input value={form.plateforme} onChange={e=>setForm(f=>({...f,plateforme:e.target.value}))} placeholder="Spotify, Apple Music…"/></div>
-
-          <button onClick={plan==="free"?()=>setPhase("locked"):gen} disabled={(!form.titre||!form.genre||!form.sortie)&&plan!=="free"} style={{background:plan==="free"?"#1A1A1A":"linear-gradient(135deg,#FFD43B,#FFC300)",border:plan==="free"?"1px solid #FFD43B33":"none",color:plan==="free"?"#FFD43B":"#000",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:2,textTransform:"uppercase",padding:"13px 20px",borderRadius:8,cursor:"pointer",fontWeight:600,width:"100%",marginTop:6}}>
-            {plan==="free"?"🔒 Réservé aux abonnés":"✦ Générer mon Release Plan →"}
-          </button>
-        </div>
-      )}
-
-      {phase==="loading"&&(
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",gap:16}}>
-          <div style={{fontSize:32}}>📅</div>
-          <div style={{fontSize:13,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:3,color:"#FFD43B"}}>GÉNÉRATION EN COURS</div>
-          <div style={{fontSize:11,color:"#555",textAlign:"center",padding:"0 40px",lineHeight:1.6}}>L'IA construit ton plan personnalisé…</div>
-          <div style={{display:"flex",gap:7}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#FFD43B",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div>
-        </div>
-      )}
-
-      {phase==="result"&&planData&&(
-        <div style={{padding:"14px 18px 20px"}}>
-          <div style={{background:"#0D0D0D",border:"1px solid #FFD43B22",borderRadius:8,padding:"11px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:20}}>🎵</span>
-            <div><div style={{fontSize:11,color:"#FFD43B",fontWeight:600}}>{form.titre}</div><div style={{fontSize:10,color:"#555"}}>Sortie : {new Date(form.sortie).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}</div></div>
-            <div style={{marginLeft:"auto",fontSize:11,color:"#555"}}>{Object.values(checks).filter(Boolean).length}/{planData.length}</div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {planData.map((item,i)=>{
-              const done=!!checks[i];
-              const isToday=item.j===0;
-              return(
-                <div key={i} className="fu" style={{background:isToday?"#140F00":"#0D0D0D",border:`1px solid ${isToday?"#FFD43B44":done?"#00C9A722":"#141414"}`,borderRadius:10,padding:"12px 14px",animationDelay:`${i*0.04}s`,position:"relative",overflow:"hidden"}}>
-                  {isToday&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"#FFD43B"}}/>}
-                  <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-                    <div onClick={()=>setChecks(c=>({...c,[i]:!c[i]}))} style={{width:20,height:20,borderRadius:5,border:`1.5px solid ${done?"#00C9A7":"#2A2A2A"}`,background:done?"#00C9A722":"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,transition:"all 0.2s"}}>{done&&<span style={{fontSize:11,color:"#00C9A7",fontWeight:700}}>✓</span>}</div>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                        <span style={{fontSize:14}}>{item.icon}</span>
-                        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:13,letterSpacing:2,color:isToday?"#FFD43B":done?"#444":"#F0EDE8"}}>{item.label}</span>
-                        <span style={{fontSize:9,color:isToday?"#FFD43B":"#555",letterSpacing:1}}>{getJDate(item.j)}</span>
-                        {isToday&&<span style={{fontSize:8,color:"#000",background:"#FFD43B",padding:"1px 6px",borderRadius:4,fontWeight:700,letterSpacing:1}}>AUJOURD'HUI</span>}
-                      </div>
-                      <div style={{fontSize:9,color:"#555",letterSpacing:1,marginBottom:4}}>{item.cat?.toUpperCase()}</div>
-                      <div style={{fontSize:11,color:done?"#3A3A3A":"#AAA",lineHeight:1.6,textDecoration:done?"line-through":"none"}}>{item.action}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <button className="btn-o" style={{width:"100%",marginTop:16}} onClick={()=>{
-            const txt=planData.map(item=>`${item.label} (${getJDate(item.j)}) — ${item.cat}\n${item.action}`).join("\n\n");
-            navigator.clipboard.writeText(txt);
-          }}>Copier le plan →</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-// ─── CAMPAIGN CALENDAR ───────────────────────────────────────────────────────
-// Calendrier de campagne promo. Vue mois/semaine. Statuts : à faire / planifié / publié.
-// Stocké en localStorage. Premium : édition complète. Free : lecture seule.
-function CampaignCalendar({plan,onGoPlan,onBack}){
-  const STORE_KEY="indy_calendar_v1";
-  const [events,setEvents]=useState(()=>{
-    try{return JSON.parse(localStorage.getItem(STORE_KEY)||"[]");}
-    catch{return [];}
-  });
-  const [view,setView]=useState("week"); // week | month
-  const [currentDate,setCurrentDate]=useState(new Date());
-  const [showForm,setShowForm]=useState(false);
-  const [editEvent,setEditEvent]=useState(null);
-  const [form,setForm]=useState({date:"",type:"post",titre:"",statut:"todo",color:"#FF6B35"});
-
-  useEffect(()=>{
-    try{localStorage.setItem(STORE_KEY,JSON.stringify(events));}catch{}
-  },[events]);
-
-  const TYPES=[
-    {v:"post",l:"Post",e:"📸",c:"#FF6B35"},
-    {v:"reel",l:"Reel / TikTok",e:"🎬",c:"#F783AC"},
-    {v:"story",l:"Story",e:"⭕",c:"#845EF7"},
-    {v:"live",l:"Live",e:"🔴",c:"#F03E3E"},
-    {v:"email",l:"Newsletter",e:"📩",c:"#74C0FC"},
-    {v:"release",l:"Sortie",e:"🚀",c:"#FFD43B"},
-  ];
-  const STATUTS=[
-    {v:"todo",l:"À faire",c:"#555"},
-    {v:"scheduled",l:"Planifié",c:"#845EF7"},
-    {v:"published",l:"Publié",c:"#00C9A7"},
-  ];
-
-  const saveEvent=()=>{
-    if(!form.date||!form.titre)return;
-    const typ=TYPES.find(t=>t.v===form.type);
-    const ev={...form,id:editEvent?.id||Date.now(),color:typ?.c||"#FF6B35"};
-    if(editEvent){
-      setEvents(prev=>prev.map(e=>e.id===editEvent.id?ev:e));
-    }else{
-      setEvents(prev=>[...prev,ev].sort((a,b)=>new Date(a.date)-new Date(b.date)));
-    }
-    setShowForm(false);setEditEvent(null);
-    setForm({date:"",type:"post",titre:"",statut:"todo",color:"#FF6B35"});
-  };
-
-  const delEvent=(id)=>{setEvents(prev=>prev.filter(e=>e.id!==id));setShowForm(false);setEditEvent(null);};
-  const cycleStatut=(id)=>{
-    const order=["todo","scheduled","published"];
-    setEvents(prev=>prev.map(e=>{if(e.id!==id)return e;const i=order.indexOf(e.statut);return{...e,statut:order[(i+1)%3]};
-    }));
-  };
-
-  // Calcul des jours de la semaine courante
-  const getWeekDays=()=>{
-    const start=new Date(currentDate);
-    start.setDate(start.getDate()-start.getDay()+1); // lundi
-    return Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(d.getDate()+i);return d;});
-  };
-
-  // Calcul du mois courant
-  const getMonthDays=()=>{
-    const year=currentDate.getFullYear();const month=currentDate.getMonth();
-    const first=new Date(year,month,1);const last=new Date(year,month+1,0);
-    const startDay=first.getDay()||7; // lundi=1
-    const days=[];
-    for(let i=1;i<startDay;i++)days.push(null);
-    for(let d=1;d<=last.getDate();d++)days.push(new Date(year,month,d));
-    return days;
-  };
-
-  const getEventsForDate=(date)=>{
-    const ds=date.toISOString().slice(0,10);
-    return events.filter(e=>e.date===ds);
-  };
-
-  const navigate=(dir)=>{
-    const d=new Date(currentDate);
-    if(view==="week")d.setDate(d.getDate()+dir*7);
-    else d.setMonth(d.getMonth()+dir);
-    setCurrentDate(d);
-  };
-
-  const isToday=(date)=>date.toISOString().slice(0,10)===new Date().toISOString().slice(0,10);
-
-  const weekDays=getWeekDays();
-  const monthDays=getMonthDays();
-  const JOURS=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
-  const MOIS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-
-  if(plan==="free")return(
-    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="CALENDRIER PROMO" accent="#74C0FC" onBack={onBack}/>
-      <div style={{padding:"30px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
-        <div style={{fontSize:48}}>📅</div>
-        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:3}}>CALENDRIER DE CAMPAGNE</div>
-        <div style={{fontSize:12,color:"#555",lineHeight:1.7,maxWidth:280}}>Planifie posts, reels, stories, lives et sorties. Vue semaine ou mois. Statuts, couleurs et rappels.</div>
-        <div style={{background:"#0D0D0D",border:"1px solid #1A1A1A",borderRadius:10,padding:"14px 16px",width:"100%",maxWidth:320}}>
-          {[["📸 Posts, Reels, Stories, Lives","#FF6B35"],["🎬 Vue semaine et mois","#845EF7"],["✅ Statuts à faire / planifié / publié","#00C9A7"],["🔗 Connexion à ton Release Plan","#FFD43B"]].map(([f,c])=>(
-            <div key={f} style={{display:"flex",gap:8,fontSize:11,color:"#666",padding:"5px 0",alignItems:"center"}}><span style={{color:c}}>✓</span>{f}</div>
-          ))}
-        </div>
-        <button className="btn" style={{maxWidth:300,width:"100%"}} onClick={onGoPlan}>Débloquer — 9,90€/mois →</button>
-      </div>
-    </div>
-  );
-
-  return(
-    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="CALENDRIER PROMO" accent="#74C0FC" onBack={onBack}
-        right={<button onClick={()=>{setEditEvent(null);setForm({date:new Date().toISOString().slice(0,10),type:"post",titre:"",statut:"todo",color:"#FF6B35"});setShowForm(true);}} style={{background:"#74C0FC",border:"none",color:"#000",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:1.5,fontWeight:700,padding:"7px 12px",borderRadius:8,cursor:"pointer"}}>+ AJOUTER</button>}
-      />
-
-      {/* Toggle vue */}
-      <div style={{display:"flex",gap:0,borderBottom:"1px solid #111"}}>
-        <button onClick={()=>setView("week")} style={{flex:1,background:view==="week"?"#74C0FC12":"none",border:"none",borderBottom:`2px solid ${view==="week"?"#74C0FC":"transparent"}`,color:view==="week"?"#74C0FC":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>Semaine</button>
-        <button onClick={()=>setView("month")} style={{flex:1,background:view==="month"?"#74C0FC12":"none",border:"none",borderBottom:`2px solid ${view==="month"?"#74C0FC":"transparent"}`,color:view==="month"?"#74C0FC":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>Mois</button>
-      </div>
-
-      {/* Navigation */}
-      <div style={{padding:"10px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <button onClick={()=>navigate(-1)} style={{background:"none",border:"none",color:"#555",fontSize:20,cursor:"pointer",padding:"4px 8px"}}>←</button>
-        <div style={{fontSize:12,color:"#CCC",fontWeight:600,letterSpacing:1}}>
-          {view==="week"?`${weekDays[0].toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} — ${weekDays[6].toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}`:`${MOIS[currentDate.getMonth()]} ${currentDate.getFullYear()}`}
-        </div>
-        <button onClick={()=>navigate(1)} style={{background:"none",border:"none",color:"#555",fontSize:20,cursor:"pointer",padding:"4px 8px"}}>→</button>
-      </div>
-
-      {/* Vue semaine */}
-      {view==="week"&&(
-        <div style={{padding:"0 10px 20px"}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
-            {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:9,color:"#555",letterSpacing:1,padding:"4px 0"}}>{j}</div>)}
-            {weekDays.map((date,i)=>{
-              const evs=getEventsForDate(date);
-              const today=isToday(date);
-              return(
-                <div key={i} style={{minHeight:90,background:today?"#0D0D0D":"#080808",border:`1px solid ${today?"#74C0FC33":"#111"}`,borderRadius:8,padding:"5px 4px",display:"flex",flexDirection:"column",gap:3}}>
-                  <div style={{textAlign:"center",fontSize:11,fontWeight:today?700:400,color:today?"#74C0FC":"#555"}}>{date.getDate()}</div>
-                  {evs.map(e=>{
-                    const stat=STATUTS.find(s=>s.v===e.statut);
-                    return(
-                      <div key={e.id} onClick={()=>{setEditEvent(e);setForm({...e});setShowForm(true);}} style={{background:`${e.color}22`,border:`1px solid ${e.color}44`,borderRadius:4,padding:"2px 4px",cursor:"pointer"}}>
-                        <div style={{fontSize:9,color:e.color,fontWeight:600,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.titre}</div>
-                        <div style={{width:"100%",height:2,borderRadius:1,background:stat?.c||"#555",marginTop:2}}/>
-                      </div>
-                    );
-                  })}
-                  <button onClick={()=>{setEditEvent(null);setForm({date:date.toISOString().slice(0,10),type:"post",titre:"",statut:"todo",color:"#FF6B35"});setShowForm(true);}} style={{background:"none",border:"none",color:"#222",fontSize:14,cursor:"pointer",padding:0,lineHeight:1,marginTop:"auto"}}>+</button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Vue mois */}
-      {view==="month"&&(
-        <div style={{padding:"0 10px 20px"}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
-            {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:8,color:"#444",letterSpacing:0.5,padding:"4px 0"}}>{j}</div>)}
-            {monthDays.map((date,i)=>{
-              if(!date)return<div key={`empty-${i}`}/>;
-              const evs=getEventsForDate(date);
-              const today=isToday(date);
-              return(
-                <div key={i} onClick={()=>{setEditEvent(null);setForm({date:date.toISOString().slice(0,10),type:"post",titre:"",statut:"todo",color:"#FF6B35"});setShowForm(true);}} style={{minHeight:52,background:today?"#0D0D0D":"transparent",border:`1px solid ${today?"#74C0FC22":"#0F0F0F"}`,borderRadius:6,padding:"3px",cursor:"pointer",display:"flex",flexDirection:"column",gap:2}}>
-                  <div style={{textAlign:"center",fontSize:10,color:today?"#74C0FC":"#555",fontWeight:today?700:400}}>{date.getDate()}</div>
-                  {evs.slice(0,2).map(e=>(
-                    <div key={e.id} onClick={ev=>{ev.stopPropagation();setEditEvent(e);setForm({...e});setShowForm(true);}} style={{background:`${e.color}33`,borderRadius:3,padding:"1px 3px",overflow:"hidden"}}>
-                      <div style={{fontSize:8,color:e.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.titre}</div>
-                    </div>
-                  ))}
-                  {evs.length>2&&<div style={{fontSize:7,color:"#555",textAlign:"center"}}>+{evs.length-2}</div>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Légende statuts */}
-      <div style={{padding:"0 18px 8px",display:"flex",gap:12,overflowX:"auto",scrollbarWidth:"none"}}>
-        {STATUTS.map(s=><div key={s.v} style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}><div style={{width:8,height:8,borderRadius:"50%",background:s.c}}/><span style={{fontSize:9,color:"#555",letterSpacing:1}}>{s.l.toUpperCase()}</span></div>)}
-      </div>
-
-      {/* Stats rapides */}
-      <div style={{padding:"8px 18px 20px",display:"flex",gap:8}}>
-        {STATUTS.map(s=>(
-          <div key={s.v} style={{flex:1,background:"#0D0D0D",border:"1px solid #141414",borderRadius:8,padding:"8px",textAlign:"center"}}>
-            <div style={{fontSize:18,fontFamily:"'Bebas Neue',sans-serif",color:s.c}}>{events.filter(e=>e.statut===s.v).length}</div>
-            <div style={{fontSize:8,color:"#555",letterSpacing:1}}>{s.l.toUpperCase()}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Formulaire ajout/edit */}
-      {showForm&&(
-        <div className="panel"><div className="pin" style={{borderTopColor:"#74C0FC"}}>
-          <div style={{padding:"16px 20px",borderBottom:"1px solid #111",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{fontSize:9,color:"#74C0FC",letterSpacing:2}}>{editEvent?"MODIFIER L'ÉVÉNEMENT":"NOUVEL ÉVÉNEMENT"}</div>
-            <button onClick={()=>{setShowForm(false);setEditEvent(null);}} style={{background:"none",border:"none",color:"#999",fontSize:20,cursor:"pointer"}}>✕</button>
-          </div>
-          <div style={{padding:"18px 20px 40px",display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',sans-serif"}}>
-            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>DATE *</label><input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>TITRE *</label><input value={form.titre} onChange={e=>setForm(f=>({...f,titre:e.target.value}))} placeholder="Titre du post, reel…"/></div>
-            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:8,fontWeight:600}}>TYPE</label>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {TYPES.map(t=>(
-                  <button key={t.v} onClick={()=>setForm(f=>({...f,type:t.v,color:t.c}))} style={{background:form.type===t.v?`${t.c}18`:"#0D0D0D",border:`1px solid ${form.type===t.v?t.c:"#1A1A1A"}`,color:form.type===t.v?t.c:"#555",fontFamily:"'Inter',sans-serif",fontSize:10,padding:"6px 10px",borderRadius:20,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
-                    {t.e} {t.l}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div><label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:8,fontWeight:600}}>STATUT</label>
-              <div style={{display:"flex",gap:6}}>
-                {STATUTS.map(s=>(
-                  <button key={s.v} onClick={()=>setForm(f=>({...f,statut:s.v}))} style={{flex:1,background:form.statut===s.v?`${s.c}18`:"#0D0D0D",border:`1px solid ${form.statut===s.v?s.c:"#1A1A1A"}`,color:form.statut===s.v?s.c:"#555",fontFamily:"'Inter',sans-serif",fontSize:10,padding:"7px 4px",borderRadius:6,cursor:"pointer",textAlign:"center"}}>{s.l}</button>
-                ))}
-              </div>
-            </div>
-            <div style={{display:"flex",gap:10,marginTop:6}}>
-              <button className="btn" style={{flex:2,background:"#74C0FC",color:"#000"}} disabled={!form.date||!form.titre} onClick={saveEvent}>{editEvent?"Enregistrer":"Ajouter →"}</button>
-              {editEvent&&<button className="btn-o" style={{flex:1,color:"#F03E3E44",borderColor:"#F03E3E22"}} onClick={()=>{if(window.confirm("Supprimer ?"))delEvent(editEvent.id);}}>Suppr.</button>}
-            </div>
-            {editEvent&&<button onClick={()=>cycleStatut(editEvent.id)} style={{background:"none",border:"1px solid #1A1A1A",color:"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",borderRadius:6,cursor:"pointer"}}>Changer le statut →</button>}
           </div>
         </div></div>
       )}
@@ -2414,293 +1624,68 @@ function Annuaire({plan,onGoPlan,onBack}){
   );
 }
 
-// ─── SUBVENTIONS ENRICHI ──────────────────────────────────────────────────────
-// v2 : matching + deadlines + checklist dossier + sauvegarde + appels à projets
-const AIDES_DEADLINES = {
-  cnm_prod:   {deadline:"31 mars · 30 juin · 30 sept · 31 déc",recurrence:"Trimestriel",urgency:null},
-  cnm_clip:   {deadline:"31 mars · 30 juin · 30 sept · 31 déc",recurrence:"Trimestriel",urgency:null},
-  sacem_bourse:{deadline:"15 février · 15 septembre",recurrence:"2×/an",urgency:null},
-  adami:      {deadline:"1er mars · 1er octobre",recurrence:"2×/an",urgency:null},
-  spedidam:   {deadline:"Ouvert en continu",recurrence:"Continu",urgency:null},
-  drac:       {deadline:"Variable selon région",recurrence:"Variable",urgency:null},
-  kkbb:       {deadline:"Aucune — lancement libre",recurrence:"Libre",urgency:null},
-};
-const AIDES_CHECKLIST = {
-  cnm_prod:   ["Compte CNM créé (cnm.fr)","SIRET ou statut artistique valide","Maquette ou projet finalisé","Devis de production","Budget prévisionnel détaillé","Dossier artistique (bio + visuels)"],
-  cnm_clip:   ["Compte CNM créé","Devis réalisateur","Storyboard ou traitement","Budget clip","Distribution confirmée"],
-  sacem_bourse:["Membre SACEM actif (12 mois min.)","Projet de création défini","Dossier artistique complet","Justificatifs revenus artistiques"],
-  adami:      ["Être artiste-interprète (intermittent ou équivalent)","Projet structuré avec budget","Contrats ou preuves d'activité","Dossier en ligne sur adami.fr"],
-  spedidam:   ["Être musicien interprète","Preuves d'activité scénique","Projet avec budget","Dossier sur spedidam.fr"],
-  drac:       ["Contacter ta DRAC régionale","Ancrage territorial du projet","Association ou structure légale","Dossier artistique + budget"],
-  kkbb:       ["Contreparties définies","Vidéo de présentation (60-90s)","Objectif réaliste (60-70% de ta cible réelle)","Communauté active prête à soutenir"],
-};
-const APPELS_PROJETS = [
-  {id:"ap1",titre:"CNM — Aide à l'export",org:"Centre National de la Musique",icon:"🌍",color:"#FF6B35",montant:"Jusqu'à 30 000 €",deadline:"30 juin 2026",desc:"Soutien aux artistes français souhaitant développer leur carrière à l'international.",lien:"https://cnm.fr/aides/",tags:["Export","International","Label"]},
-  {id:"ap2",titre:"SACEM — Aide numérique",org:"SACEM",icon:"💻",color:"#845EF7",montant:"1 000 – 5 000 €",deadline:"15 sept. 2026",desc:"Aide à la création de contenu numérique, clips, vidéos pour membres SACEM.",lien:"https://www.sacem.fr",tags:["Numérique","Clip","Membre SACEM"]},
-  {id:"ap3",titre:"Région IDF — Aide jeunes artistes",org:"Île-de-France",icon:"🗼",color:"#74C0FC",montant:"3 000 – 15 000 €",deadline:"1er sept. 2026",desc:"Aide à l'émergence pour les artistes franciliens de moins de 35 ans.",lien:"https://www.lerif.org",tags:["IDF","Émergence","Jeunes"]},
-  {id:"ap4",titre:"ADAMI — Aide à la création",org:"ADAMI",icon:"🎤",color:"#F03E3E",montant:"2 000 – 10 000 €",deadline:"1er oct. 2026",desc:"Soutien aux projets de création live et enregistrement pour artistes-interprètes.",lien:"https://www.adami.fr",tags:["Live","Enregistrement","Interprètes"]},
-  {id:"ap5",titre:"CNM — Tournée nationale",org:"Centre National de la Musique",icon:"🚌",color:"#20C997",montant:"Jusqu'à 40 000 €",deadline:"30 sept. 2026",desc:"Aide à la diffusion live pour les artistes en tournée nationale.",lien:"https://cnm.fr/aides/",tags:["Tournée","Live","National"]},
-  {id:"ap6",titre:"SPEDIDAM — Enregistrement",org:"SPEDIDAM",icon:"🥁",color:"#FFD43B",montant:"500 – 6 000 €",deadline:"Continu",desc:"Soutien aux enregistrements de musiciens interprètes.",lien:"https://www.spedidam.fr/aides/",tags:["Enregistrement","Studio","Musiciens"]},
-];
-
+// ─── SUBVENTIONS ─────────────────────────────────────────────────────────────
 function Subventions({plan,onGoPlan,onBack}){
-  const [ans,setAns]=useState({});
-  const [qi,setQi]=useState(0);
-  const [phase,setPhase]=useState("q"); // q | results | detail | appels
-  const [exp,setExp]=useState(null);
-  const [saved,setSaved]=useState(()=>{try{return JSON.parse(localStorage.getItem("indy_saved_aides")||"[]");}catch{return [];}});
+  const [ans,setAns]=useState({});const [qi,setQi]=useState(0);const [phase,setPhase]=useState("q");const [exp,setExp]=useState(null);
   const [showToastSub,setShowToastSub]=useState(false);
-  const [tab,setTab]=useState("matching"); // matching | appels
-
-  const saveAide=(id)=>{
-    const next=saved.includes(id)?saved.filter(x=>x!==id):[...saved,id];
-    setSaved(next);
-    try{localStorage.setItem("indy_saved_aides",JSON.stringify(next));}catch{}
-  };
-
-  // Calcul jours avant deadline
-  const daysToDeadline=(str)=>{
-    if(!str||str.includes("Continu")||str.includes("Variable")||str.includes("Libre"))return null;
-    // Chercher une date type "31 mars", "15 sept. 2026"
-    const parts=str.split("·");
-    const first=parts[0].trim();
-    const d=new Date(first+" 2026");
-    if(isNaN(d))return null;
-    return Math.ceil((d-new Date())/86400000);
-  };
-
   if(plan==="free")return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
       <Hdr sub="FINANCEMENT & AIDES" accent="#F03E3E" onBack={onBack}/>
-      <div style={{padding:"12px 18px",background:"#0D0D0D",borderBottom:"1px solid #111",fontSize:11,color:"#555",lineHeight:1.6}}>
-        <span style={{color:"#F03E3E",fontSize:9,letterSpacing:2,display:"block",marginBottom:3}}>◆ MATCHING SUBVENTIONS</span>
-        4 questions → tes aides personnalisées. Réservé aux abonnés.
-      </div>
+      <div style={{padding:"12px 18px",background:"#0D0D0D",borderBottom:"1px solid #111",fontSize:11,color:"#555",lineHeight:1.6}}><span style={{color:"#F03E3E",fontSize:9,letterSpacing:2,display:"block",marginBottom:3}}>◆ MATCHING SUBVENTIONS</span>4 questions → tes aides personnalisées. Réservé aux abonnés.</div>
       {FINANCEMENT_QS.map((q,i)=>(
         <div key={q.id} style={{padding:"14px 18px",borderBottom:"1px solid #0F0F0F",opacity:i===0?0.7:0.3}}>
           <div style={{fontSize:9,color:"#555",letterSpacing:1,fontWeight:600,marginBottom:5}}>QUESTION {i+1}/4</div>
           <div style={{fontSize:14,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,marginBottom:10,color:"#333"}}>{q.q.toUpperCase()}</div>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {q.opts.map(opt=><div key={opt.v} onClick={()=>{setShowToastSub(true);setTimeout(()=>setShowToastSub(false),3000);}} style={{background:"#0A0A0A",border:"1px solid #0F0F0F",color:"#2A2A2A",fontFamily:"'Inter',sans-serif",fontSize:12,padding:"10px 14px",borderRadius:7,cursor:"pointer",display:"flex",gap:10}}><span style={{width:16,height:16,borderRadius:"50%",border:"1.5px solid #1A1A1A",flexShrink:0}}/>{opt.l}</div>)}
-          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>{q.opts.map(opt=><div key={opt.v} onClick={()=>{setShowToastSub(true);setTimeout(()=>setShowToastSub(false),3000);}} style={{background:"#0A0A0A",border:"1px solid #0F0F0F",color:"#2A2A2A",fontFamily:"'Inter',sans-serif",fontSize:12,padding:"10px 14px",borderRadius:7,cursor:"pointer",display:"flex",gap:10}}><span style={{width:16,height:16,borderRadius:"50%",border:"1.5px solid #1A1A1A",flexShrink:0}}></span>{opt.l}</div>)}</div>
         </div>
       ))}
       <div style={{padding:"16px 18px"}}><button className="btn" onClick={onGoPlan}>Débloquer le matching — 9,90€/mois →</button></div>
       {showToastSub&&<GateToast onUpgrade={onGoPlan}/>}
     </div>
   );
-
   const answer=(qid,val)=>{const n={...ans,[qid]:val};setAns(n);if(qi<FINANCEMENT_QS.length-1)setTimeout(()=>setQi(qi+1),280);};
   const allDone=Object.keys(ans).length===FINANCEMENT_QS.length;
   const results=AIDES.map(a=>({...a,score:scoreAide(a,ans)})).filter(a=>a.score>=40).sort((a,b)=>b.score-a.score);
-  const top=results.filter(a=>a.score>=70);
-  const possible=results.filter(a=>a.score<70);
-
+  const top=results.filter(a=>a.score>=70);const possible=results.filter(a=>a.score<70);
   return(
     <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="FINANCEMENT & DÉMARCHES" accent="#F03E3E" onBack={onBack}
-        right={phase==="results"&&<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>{setPhase("q");setAns({});setQi(0);}}>↺ Refaire</button>}
-      />
-
-      {/* Tabs Matching / Appels à projets */}
-      <div style={{display:"flex",borderBottom:"1px solid #111"}}>
-        <button onClick={()=>{setTab("matching");if(phase==="appels")setPhase("q");}} style={{flex:1,background:tab==="matching"?"#F03E3E12":"none",border:"none",borderBottom:`2px solid ${tab==="matching"?"#F03E3E":"transparent"}`,color:tab==="matching"?"#F03E3E":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>🎯 Matching</button>
-        <button onClick={()=>{setTab("appels");setPhase("appels");}} style={{flex:1,background:tab==="appels"?"#F03E3E12":"none",border:"none",borderBottom:`2px solid ${tab==="appels"?"#F03E3E":"transparent"}`,color:tab==="appels"?"#F03E3E":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>📅 Appels à projets</button>
-        {saved.length>0&&<button onClick={()=>setPhase("saved")} style={{flex:1,background:phase==="saved"?"#FFD43B12":"none",border:"none",borderBottom:`2px solid ${phase==="saved"?"#FFD43B":"transparent"}`,color:phase==="saved"?"#FFD43B":"#555",fontFamily:"'Inter',sans-serif",fontSize:10,letterSpacing:1.5,padding:"10px",cursor:"pointer",textTransform:"uppercase"}}>⭐ Sauvés ({saved.length})</button>}
-      </div>
-
-      {/* ── TAB MATCHING ─────────────────────────────────────── */}
-      {tab==="matching"&&phase==="q"&&(
+      <Hdr sub="FINANCEMENT & DÉMARCHES" accent="#F03E3E" onBack={onBack} right={phase==="results"&&<button className="btn-o" style={{width:"auto",padding:"6px 12px",fontSize:10}} onClick={()=>{setPhase("q");setAns({});setQi(0);}}>↺ Refaire</button>}/>
+      {phase==="q"&&(
         <div style={{padding:"20px 18px"}}>
-          <div style={{display:"flex",gap:5,marginBottom:24}}>
-            {FINANCEMENT_QS.map((q,i)=><div key={i} style={{flex:1,height:3,borderRadius:2,background:ans[q.id]?"#F03E3E":i===qi?"#2A2A2A":"#111",transition:"background 0.3s"}}/>)}
-          </div>
+          <div style={{display:"flex",gap:5,marginBottom:24}}>{FINANCEMENT_QS.map((q,i)=><div key={i} style={{flex:1,height:3,borderRadius:2,background:ans[q.id]?"#F03E3E":i===qi?"#2A2A2A":"#111",transition:"background 0.3s"}}/>)}</div>
           {FINANCEMENT_QS.map((q,i)=>{if(i!==qi)return null;return(
             <div key={q.id} className="fu">
               <div style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,marginBottom:6}}>QUESTION {i+1}/{FINANCEMENT_QS.length}</div>
               <div style={{fontSize:18,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,marginBottom:18}}>{q.q.toUpperCase()}</div>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {q.opts.map(opt=>(
-                  <button key={opt.v} onClick={()=>answer(q.id,opt.v)} style={{background:ans[q.id]===opt.v?"#150808":"#0D0D0D",border:`1px solid ${ans[q.id]===opt.v?"#F03E3E":"#1A1A1A"}`,color:ans[q.id]===opt.v?"#F03E3E":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"13px 15px",borderRadius:7,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
-                    <span style={{width:16,height:16,borderRadius:"50%",border:`1.5px solid ${ans[q.id]===opt.v?"#F03E3E":"#333"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#F03E3E",flexShrink:0}}>{ans[q.id]===opt.v?"✓":""}</span>
-                    {opt.l}
-                  </button>
-                ))}
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>
-                {i>0?<button className="btn-o" onClick={()=>setQi(i-1)}>← Retour</button>:<div/>}
-                {allDone&&<button className="btn" style={{width:"auto",padding:"10px 20px",background:"#F03E3E"}} onClick={()=>setPhase("results")}>Voir mes aides →</button>}
-              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>{q.opts.map(opt=><button key={opt.v} onClick={()=>answer(q.id,opt.v)} style={{background:ans[q.id]===opt.v?"#150808":"#0D0D0D",border:`1px solid ${ans[q.id]===opt.v?"#F03E3E":"#1A1A1A"}`,color:ans[q.id]===opt.v?"#F03E3E":"#777",fontFamily:"'Inter',sans-serif",fontSize:13,padding:"13px 15px",borderRadius:7,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:10}}><span style={{width:16,height:16,borderRadius:"50%",border:`1.5px solid ${ans[q.id]===opt.v?"#F03E3E":"#333"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:"#F03E3E",flexShrink:0}}>{ans[q.id]===opt.v?"✓":""}</span>{opt.l}</button>)}</div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>{i>0?<button className="btn-o" onClick={()=>setQi(i-1)}>← Retour</button>:<div/>}{allDone&&<button className="btn" style={{width:"auto",padding:"10px 20px",background:"#F03E3E"}} onClick={()=>setPhase("results")}>Voir mes aides →</button>}</div>
             </div>
           );})}
         </div>
       )}
-
-      {tab==="matching"&&phase==="results"&&(
-        <div style={{padding:"14px 18px 20px"}}>
-          {/* Résumé */}
-          <div style={{background:"#0D0D0D",border:"1px solid #F03E3E18",borderRadius:8,padding:"14px",marginBottom:18}}>
-            <div style={{fontSize:9,color:"#F03E3E",letterSpacing:2,marginBottom:5}}>◆ RÉSULTAT MATCHING</div>
-            <div style={{fontSize:20,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>{results.length} AIDE{results.length>1?"S":""} IDENTIFIÉE{results.length>1?"S":""}</div>
-            <div style={{fontSize:11,color:"#999",marginTop:3}}>{top.length} forte{top.length>1?"s":""} · {possible.length} possible{possible.length>1?"s":""}</div>
-          </div>
-          {top.length>0&&(
-            <>
-              <div style={{fontSize:9,letterSpacing:3,color:"#F03E3E",marginBottom:10}}>✦ CORRESPONDANCES FORTES</div>
-              {top.map(a=><AideCardV2 key={a.id} aide={a} expanded={exp===a.id} onToggle={()=>setExp(exp===a.id?null:a.id)} saved={saved.includes(a.id)} onSave={()=>saveAide(a.id)}/>)}
-            </>
-          )}
-          {possible.length>0&&(
-            <>
-              <div style={{fontSize:9,letterSpacing:3,color:"#999",marginTop:16,marginBottom:10}}>◦ AIDES POSSIBLES</div>
-              {possible.map(a=><AideCardV2 key={a.id} aide={a} expanded={exp===a.id} onToggle={()=>setExp(exp===a.id?null:a.id)} saved={saved.includes(a.id)} onSave={()=>saveAide(a.id)}/>)}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ── TAB APPELS À PROJETS ─────────────────────────────── */}
-      {phase==="appels"&&(
-        <div style={{padding:"14px 18px 20px"}}>
-          <div style={{fontSize:11,color:"#555",lineHeight:1.6,marginBottom:14}}>
-            <span style={{color:"#F03E3E",fontSize:9,letterSpacing:2,display:"block",marginBottom:4}}>◆ APPELS EN COURS</span>
-            Opportunités actives — deadlines 2026. Sauvegarde celles qui t'intéressent.
-          </div>
-          {APPELS_PROJETS.map((ap,i)=>{
-            const days=daysToDeadline(ap.deadline);
-            const urgent=days!==null&&days<=30;
-            return(
-              <div key={ap.id} className="fu card" style={{padding:0,overflow:"hidden",marginBottom:10,animationDelay:`${i*0.04}s`,borderColor:saved.includes(ap.id)?`${ap.color}44`:"#1A1A1A"}}>
-                <div style={{height:2,background:ap.color}}/>
-                <div style={{padding:"13px 14px"}}>
-                  <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-                    <span style={{fontSize:20,flexShrink:0}}>{ap.icon}</span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:3}}>
-                        <div style={{fontSize:12,color:"#CCC",fontWeight:600,lineHeight:1.3}}>{ap.titre}</div>
-                        <button onClick={()=>saveAide(ap.id)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",flexShrink:0,opacity:saved.includes(ap.id)?1:0.3,transition:"opacity 0.2s"}}>⭐</button>
-                      </div>
-                      <div style={{fontSize:9,color:"#777",letterSpacing:1,marginBottom:6}}>{ap.org.toUpperCase()}</div>
-                      <div style={{fontSize:11,color:"#666",lineHeight:1.5,marginBottom:8}}>{ap.desc}</div>
-                      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-                        <span style={{fontSize:10,color:ap.color,background:`${ap.color}15`,padding:"2px 8px",borderRadius:20}}>{ap.montant}</span>
-                        <span style={{fontSize:9,color:urgent?"#F03E3E":"#555",background:urgent?"#F03E3E12":"#111",padding:"2px 8px",borderRadius:20,border:urgent?"1px solid #F03E3E33":"none"}}>
-                          {urgent?"⚠️ ":"📅 "}{ap.deadline}
-                          {days!==null&&<span style={{marginLeft:4,fontWeight:600}}>· J-{days}</span>}
-                        </span>
-                      </div>
-                      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
-                        {ap.tags.map(t=><span key={t} className="chip">{t}</span>)}
-                      </div>
-                      <a href={ap.lien} target="_blank" rel="noopener noreferrer" style={{display:"inline-block",fontSize:10,color:ap.color,letterSpacing:1,textDecoration:"none",border:`1px solid ${ap.color}44`,padding:"5px 12px",borderRadius:6}}>Voir le dossier ↗</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── TAB SAUVEGARDÉS ──────────────────────────────────── */}
-      {phase==="saved"&&(
-        <div style={{padding:"14px 18px 20px"}}>
-          <div style={{fontSize:9,color:"#FFD43B",letterSpacing:2,marginBottom:14}}>⭐ AIDES SAUVEGARDÉES</div>
-          {saved.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#555",fontSize:12}}>Aucune aide sauvegardée. Utilise ⭐ sur les fiches.</div>}
-          {[...AIDES,...APPELS_PROJETS].filter(a=>saved.includes(a.id)).map(a=>{
-            const isAide=!!a.score||AIDES.find(x=>x.id===a.id);
-            if(isAide){
-              const full=AIDES.find(x=>x.id===a.id)||a;
-              return <AideCardV2 key={full.id} aide={{...full,score:full.score||80}} expanded={exp===full.id} onToggle={()=>setExp(exp===full.id?null:full.id)} saved onSave={()=>saveAide(full.id)}/>;
-            }
-            const days=daysToDeadline(a.deadline);
-            return(
-              <div key={a.id} style={{background:"#0D0D0D",border:`1px solid ${a.color}33`,borderRadius:9,padding:"12px 14px",marginBottom:10,display:"flex",gap:10,alignItems:"flex-start"}}>
-                <span style={{fontSize:18}}>{a.icon}</span>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:12,color:"#CCC",fontWeight:600,marginBottom:3}}>{a.titre}</div>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    <span style={{fontSize:10,color:a.color}}>{a.montant}</span>
-                    {days!==null&&<span style={{fontSize:9,color:days<=30?"#F03E3E":"#555"}}>J-{days}</span>}
-                  </div>
-                </div>
-                <button onClick={()=>saveAide(a.id)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer"}}>⭐</button>
-              </div>
-            );
-          })}
+      {phase==="results"&&(
+        <div style={{padding:"18px 18px 20px"}}>
+          <div style={{background:"#0D0D0D",border:"1px solid #F03E3E18",borderRadius:8,padding:"14px",marginBottom:18}}><div style={{fontSize:9,color:"#F03E3E",letterSpacing:2,marginBottom:5}}>◆ RÉSULTAT MATCHING</div><div style={{fontSize:20,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>{results.length} AIDE{results.length>1?"S":""} IDENTIFIÉE{results.length>1?"S":""}</div><div style={{fontSize:11,color:"#999",marginTop:3}}>{top.length} forte{top.length>1?"s":""} · {possible.length} possible{possible.length>1?"s":""}</div></div>
+          {top.length>0&&<><div style={{fontSize:9,letterSpacing:3,color:"#F03E3E",marginBottom:10}}>✦ CORRESPONDANCES FORTES</div>{top.map(a=><AideCard key={a.id} aide={a} expanded={exp===a.id} onToggle={()=>setExp(exp===a.id?null:a.id)}/>)}</>}
+          {possible.length>0&&<><div style={{fontSize:9,letterSpacing:3,color:"#999",marginTop:16,marginBottom:10}}>◦ AIDES POSSIBLES</div>{possible.map(a=><AideCard key={a.id} aide={a} expanded={exp===a.id} onToggle={()=>setExp(exp===a.id?null:a.id)}/>)}</>}
         </div>
       )}
     </div>
   );
 }
-
-// AideCardV2 — version enrichie avec deadline + checklist dossier + sauvegarde
-function AideCardV2({aide,expanded,onToggle,saved,onSave}){
-  const dl=AIDES_DEADLINES[aide.id];
-  const checklist=AIDES_CHECKLIST[aide.id]||[];
-  const [checks,setChecks]=useState({});
-  const done=checklist.filter((_,i)=>checks[i]).length;
-
+function AideCard({aide,expanded,onToggle}){
   return(
     <div style={{background:"#0D0D0D",border:`1px solid ${expanded?aide.color+"44":"#1A1A1A"}`,borderRadius:9,overflow:"hidden",marginBottom:10}}>
       <div style={{padding:"13px 14px",cursor:"pointer",display:"flex",gap:10,alignItems:"flex-start"}} onClick={onToggle}>
         <span style={{fontSize:18,flexShrink:0}}>{aide.icon}</span>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:12,color:expanded?aide.color:"#CCC",lineHeight:1.3,marginBottom:4}}>{aide.nom}</div>
-          <div style={{fontSize:9,color:"#888",letterSpacing:1,marginBottom:6}}>{aide.org.toUpperCase()}</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            <span style={{fontSize:10,color:aide.color,background:`${aide.color}15`,padding:"2px 8px",borderRadius:20}}>{aide.montant}</span>
-            <span style={{fontSize:9,color:"#888"}}>{aide.delai}</span>
-            {dl&&<span style={{fontSize:9,color:"#555",background:"#111",padding:"2px 7px",borderRadius:20}}>📅 {dl.deadline}</span>}
-          </div>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
-          <span style={{fontSize:10,color:aide.score>=70?aide.color:"#999",background:`${aide.score>=70?aide.color:"#1A1A1A"}18`,border:`1px solid ${aide.score>=70?aide.color+"44":"#1E1E1E"}`,padding:"3px 7px",borderRadius:20}}>{aide.score}%</span>
-          <button onClick={e=>{e.stopPropagation();onSave();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:saved?1:0.3,transition:"opacity 0.2s"}}>⭐</button>
-        </div>
+        <div style={{flex:1}}><div style={{fontSize:12,color:expanded?aide.color:"#CCC",lineHeight:1.3,marginBottom:4}}>{aide.nom}</div><div style={{fontSize:9,color:"#888",letterSpacing:1,marginBottom:6}}>{aide.org.toUpperCase()}</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{fontSize:10,color:aide.color,background:`${aide.color}15`,padding:"2px 8px",borderRadius:20}}>{aide.montant}</span><span style={{fontSize:9,color:"#888"}}>{aide.delai}</span></div></div>
+        <span style={{fontSize:10,color:aide.score>=70?aide.color:"#999",background:`${aide.score>=70?aide.color:"#1A1A1A"}18`,border:`1px solid ${aide.score>=70?aide.color+"44":"#1E1E1E"}`,padding:"3px 7px",borderRadius:20,flexShrink:0}}>{aide.score}%</span>
       </div>
       {expanded&&(
         <div style={{padding:"0 14px 14px",borderTop:"1px solid #111"}}>
           <p style={{fontSize:11,color:"#777",lineHeight:1.7,margin:"12px 0"}}>{aide.desc}</p>
-
-          {/* Deadline enrichie */}
-          {dl&&(
-            <div style={{background:"#080808",border:"1px solid #1A1A1A",borderRadius:7,padding:"10px 12px",marginBottom:12}}>
-              <div style={{fontSize:9,color:"#F03E3E",letterSpacing:2,marginBottom:5}}>📅 DEADLINES</div>
-              <div style={{fontSize:11,color:"#888",marginBottom:2}}>{dl.deadline}</div>
-              <div style={{fontSize:9,color:"#555",letterSpacing:1}}>Rythme : {dl.recurrence}</div>
-            </div>
-          )}
-
-          {/* Checklist dossier */}
-          {checklist.length>0&&(
-            <div style={{marginBottom:12}}>
-              <div style={{fontSize:9,color:aide.color,letterSpacing:2,marginBottom:8,display:"flex",justifyContent:"space-between"}}>
-                <span>✓ CHECKLIST DOSSIER</span>
-                <span style={{color:"#555"}}>{done}/{checklist.length}</span>
-              </div>
-              <div style={{background:"#080808",borderRadius:7,padding:"2px 0"}}>
-                {checklist.map((item,i)=>(
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:i<checklist.length-1?"1px solid #0F0F0F":"none"}}>
-                    <div onClick={()=>setChecks(c=>({...c,[i]:!c[i]}))} style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${checks[i]?aide.color:"#2A2A2A"}`,background:checks[i]?`${aide.color}22`:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}>
-                      {checks[i]&&<span style={{fontSize:9,color:aide.color,fontWeight:700}}>✓</span>}
-                    </div>
-                    <span style={{fontSize:11,color:checks[i]?"#3A3A3A":"#888",textDecoration:checks[i]?"line-through":"none",lineHeight:1.4,transition:"color 0.2s"}}>{item}</span>
-                  </div>
-                ))}
-              </div>
-              {done===checklist.length&&<div style={{fontSize:10,color:"#00C9A7",marginTop:8,textAlign:"center"}}>✓ Dossier complet — tu peux postuler !</div>}
-            </div>
-          )}
-
-          {/* Étapes clés */}
           <div style={{fontSize:11,color:"#AAA",letterSpacing:1,fontWeight:600,marginBottom:8}}>ÉTAPES CLÉS</div>
-          {aide.etapes.map((e,i)=>(
-            <div key={i} style={{display:"flex",gap:9,padding:"7px 0",borderBottom:i<aide.etapes.length-1?"1px solid #0F0F0F":"none"}}>
-              <span style={{width:16,height:16,borderRadius:"50%",background:"#111",color:aide.color,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</span>
-              <span style={{fontSize:11,color:"#666"}}>{e}</span>
-            </div>
-          ))}
+          {aide.etapes.map((e,i)=><div key={i} style={{display:"flex",gap:9,padding:"7px 0",borderBottom:i<aide.etapes.length-1?"1px solid #0F0F0F":"none"}}><span style={{width:16,height:16,borderRadius:"50%",background:"#111",color:aide.color,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</span><span style={{fontSize:11,color:"#666"}}>{e}</span></div>)}
           <a href={aide.lien} target="_blank" rel="noopener noreferrer" className="lnk" style={{marginTop:12,background:"none",border:`1.5px solid ${aide.color}`,color:aide.color}}>Accéder au dossier →</a>
         </div>
       )}
@@ -2708,10 +1693,6 @@ function AideCardV2({aide,expanded,onToggle,saved,onSave}){
   );
 }
 
-// On garde AideCard (legacy) pour compatibilité éventuelle
-function AideCard({aide,expanded,onToggle}){
-  return <AideCardV2 aide={aide} expanded={expanded} onToggle={onToggle} saved={false} onSave={()=>{}}/>;
-}
 
 // ─── ACTUALITÉS ──────────────────────────────────────────────────────────────
 function Actualites({onBack}){
@@ -2936,313 +1917,6 @@ function Outils({onBack}){
   );
 }
 
-
-// ─── IA TOOLS HUB ─────────────────────────────────────────────────────────────
-// Centrale de tous les outils IA : bio, pitch Spotify, idées contenu,
-// stratégie sortie, analyse lyrics, hook de titre.
-// Les outils existants (PressKit, EmailGen Booking) sont référencés ici
-// avec lien direct. Les nouveaux outils sont intégrés directement.
-const IA_TOOLS = [
-  {
-    id:"bio_courte",
-    cat:"rédaction",
-    icon:"✍️",
-    color:"#FF6B35",
-    titre:"Bio artiste courte",
-    desc:"Bio ~100 mots pour réseaux sociaux, Spotify, Instagram.",
-    plan:"artiste",
-    fields:[
-      {k:"nom",l:"Nom d'artiste *",p:"Saya, TiF…"},
-      {k:"genre",l:"Genre *",p:"Afro Pop, R&B…"},
-      {k:"influences",l:"3 influences",p:"Burna Boy, Aya Nakamura…"},
-      {k:"actu",l:"Actu / dernier projet",p:"EP sorti en 2026…"},
-    ],
-    prompt:(d)=>`Bio artiste courte ~100 mots, percutante, pour réseaux sociaux et Spotify.\nArtiste : ${d.nom}\nGenre : ${d.genre}\nInfluences : ${d.influences||""}\nActu : ${d.actu||""}\nStyle direct, vivant, pas de clichés. Tutoie-moi. Commence par l'artiste, pas par une intro générique.`,
-  },
-  {
-    id:"bio_longue",
-    cat:"rédaction",
-    icon:"📰",
-    color:"#FF6B35",
-    titre:"Bio artiste longue",
-    desc:"Bio journalistique ~300 mots pour dossier de presse et booking.",
-    plan:"artiste",
-    fields:[
-      {k:"nom",l:"Nom d'artiste *",p:"Saya, TiF…"},
-      {k:"genre",l:"Genre *",p:"Afro Pop, R&B…"},
-      {k:"influences",l:"Influences",p:"Burna Boy, Aya Nakamura…"},
-      {k:"parcours",l:"Ton parcours",p:"3 ans de scène, 200K streams…"},
-      {k:"actu",l:"Dernier projet",p:"EP sorti en 2026…"},
-    ],
-    prompt:(d)=>`Bio artiste longue ~300 mots, style journalistique pour dossier de presse et booking.\nArtiste : ${d.nom}\nGenre : ${d.genre}\nInfluences : ${d.influences||""}\nParcours : ${d.parcours||""}\nProjet : ${d.actu||""}\nTon professionnel, narratif, avec relief. Pas de clichés. En français.`,
-  },
-  {
-    id:"pitch_spotify",
-    cat:"distribution",
-    icon:"🎧",
-    color:"#1DB954",
-    titre:"Pitch Spotify éditorial",
-    desc:"Message pour convaincre les éditeurs Spotify en 150 mots.",
-    plan:"artiste",
-    fields:[
-      {k:"nom",l:"Nom d'artiste *",p:"Saya…"},
-      {k:"titre",l:"Titre du morceau *",p:"Mon titre…"},
-      {k:"genre",l:"Genre + mood *",p:"Afro Pop · nostalgique…"},
-      {k:"sortie",l:"Date de sortie",p:"15 juin 2026"},
-      {k:"stats",l:"Stats actuelles",p:"50K auditeurs, Skyrock…"},
-    ],
-    prompt:(d)=>`Pitch Spotify éditorial ~150 mots pour convaincre les playlist editors.\nArtiste : ${d.nom}\nTitre : ${d.titre}\nGenre/mood : ${d.genre}\nSortie : ${d.sortie||"prochainement"}\nStats : ${d.stats||"artiste émergent"}\nStructure : accroche forte · description musicale précise · contexte artiste · appel à l'action. Pas de formules génériques. Direct, percutant.`,
-  },
-  {
-    id:"idees_contenu",
-    cat:"réseaux",
-    icon:"📱",
-    color:"#F783AC",
-    titre:"7 idées de contenu",
-    desc:"7 idées de posts/reels/stories adaptés à ton genre et ta sortie.",
-    plan:"artiste",
-    fields:[
-      {k:"nom",l:"Nom d'artiste *",p:"Saya…"},
-      {k:"genre",l:"Genre *",p:"Afro Pop…"},
-      {k:"actu",l:"Actualité du moment",p:"Sortie EP, tournée…"},
-      {k:"plateforme",l:"Plateformes",p:"Instagram, TikTok"},
-    ],
-    prompt:(d)=>`Génère 7 idées de contenu créatives et engageantes pour les réseaux sociaux.\nArtiste : ${d.nom}\nGenre : ${d.genre}\nActu : ${d.actu||"sortie prochaine"}\nPlateformes : ${d.plateforme||"Instagram, TikTok"}\nFormat : numérote chaque idée. Précise le format (Reel, Story, Post, TikTok). Inclus une accroche ou un texte de légende court. Idées originales, pas génériques. Tutoie-moi.`,
-  },
-  {
-    id:"strategie_sortie",
-    cat:"stratégie",
-    icon:"🎯",
-    color:"#845EF7",
-    titre:"Stratégie de sortie",
-    desc:"Plan stratégique complet sur 4 semaines pour maximiser ta sortie.",
-    plan:"artiste",
-    fields:[
-      {k:"nom",l:"Nom d'artiste *",p:"Saya…"},
-      {k:"genre",l:"Genre *",p:"Afro Pop…"},
-      {k:"titre",l:"Titre / Projet",p:"Mon EP…"},
-      {k:"audience",l:"Audience actuelle",p:"5K followers, 20K streams/mois…"},
-      {k:"budget",l:"Budget promo estimé",p:"500€, 0€, 1000€…"},
-    ],
-    prompt:(d)=>`Stratégie de sortie complète sur 4 semaines pour un artiste indépendant français.\nArtiste : ${d.nom} · Genre : ${d.genre}\nProjet : ${d.titre||"sortie prochaine"}\nAudience : ${d.audience||"émergent"}\nBudget : ${d.budget||"limité"}\nStructure : 1) Semaine -4 (avant) 2) Semaine -2 3) Semaine 0 (sortie) 4) Semaine +1 (relance)\nPour chaque semaine : 3 actions concrètes avec canaux précis. Budget réparti si non nul. Adapté au genre ${d.genre}. Pas de généralités.`,
-  },
-  {
-    id:"hook_titre",
-    cat:"création",
-    icon:"🎵",
-    color:"#FFD43B",
-    titre:"Analyse de hook",
-    desc:"Analyse de l'accroche de ton titre + suggestions d'amélioration.",
-    plan:"artiste",
-    fields:[
-      {k:"hook",l:"Ton hook / refrain *",p:"Colle tes paroles ici…"},
-      {k:"genre",l:"Genre *",p:"Afro Pop…"},
-      {k:"vibe",l:"Ambiance voulue",p:"Nostalgique, festif, mélancolique…"},
-    ],
-    prompt:(d)=>`Analyse ce hook/refrain en tant qu'expert en composition musicale pour le marché francophone.\nHook : "${d.hook}"\nGenre : ${d.genre}\nAmbiance : ${d.vibe||"non précisée"}\nDonne : 1) Ce qui fonctionne (mélodie, texte, accroche) 2) Ce qui peut être amélioré 3) 2 alternatives concrètes du hook. Sois direct, pas condescendant. Tutoie-moi.`,
-  },
-  {
-    id:"email_presse",
-    cat:"rédaction",
-    icon:"📩",
-    color:"#74C0FC",
-    titre:"Email presse / blogs",
-    desc:"Email percutant pour démarcher blogs, webzines et médias musicaux.",
-    plan:"artiste",
-    fields:[
-      {k:"nom",l:"Nom d'artiste *",p:"Saya…"},
-      {k:"genre",l:"Genre *",p:"Afro Pop…"},
-      {k:"titre",l:"Titre / Projet à pitcher",p:"Mon EP…"},
-      {k:"stats",l:"Stats / réalisations",p:"50K streams, Skyrock…"},
-      {k:"media",l:"Nom du média cible",p:"Indie Music FR, RFI…"},
-    ],
-    prompt:(d)=>`Email de démarchage presse professionnel et percutant (150-180 mots).\nArtiste : ${d.nom} · Genre : ${d.genre}\nProjet : ${d.titre||"sortie prochaine"}\nStats : ${d.stats||"artiste émergent"}\nMédia ciblé : ${d.media||"blog musical"}\nStructure : objet accrocheur · intro directe · pitch artistique · proposition concrète · lien EPK. Pas de politesse excessive. Ton humain mais pro. En français.`,
-  },
-];
-
-function IAToolsHub({plan,user,projects,onGoPlan,onBack}){
-  const [activeTool,setActiveTool]=useState(null);
-  const [catFilter,setCatFilter]=useState("tous");
-  const [formData,setFormData]=useState({});
-  const [phase,setPhase]=useState("form"); // form | loading | result
-  const [result,setResult]=useState("");
-  const [copied,setCopied]=useState(false);
-
-  const CATS_HUB=[
-    {id:"tous",l:"Tous",i:"🛠️"},
-    {id:"rédaction",l:"Rédaction",i:"✍️"},
-    {id:"distribution",l:"Distribution",i:"🚀"},
-    {id:"réseaux",l:"Réseaux",i:"📱"},
-    {id:"stratégie",l:"Stratégie",i:"🎯"},
-    {id:"création",l:"Création",i:"🎵"},
-  ];
-
-  const filtered=catFilter==="tous"?IA_TOOLS:IA_TOOLS.filter(t=>t.cat===catFilter);
-  const isLocked=plan==="free";
-
-  const openTool=(tool)=>{
-    // Pré-remplir depuis le profil + premier projet
-    const proj=projects[0];
-    const pre={};
-    if(tool.fields.find(f=>f.k==="nom"))pre.nom=proj?.artiste||user?.name||"";
-    if(tool.fields.find(f=>f.k==="genre"))pre.genre=proj?.genre||user?.genre||"";
-    if(tool.fields.find(f=>f.k==="titre"))pre.titre=proj?.titre||"";
-    setFormData(pre);
-    setActiveTool(tool);
-    setPhase("form");
-    setResult("");
-    setCopied(false);
-  };
-
-  const gen=async()=>{
-    if(isLocked){setPhase("locked");return;}
-    const required=activeTool.fields.filter(f=>f.l.includes("*"));
-    if(required.some(f=>!formData[f.k]?.trim()))return;
-    setPhase("loading");
-    const prompt=activeTool.prompt(formData);
-    try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:AI_SYSTEM,messages:[{role:"user",content:prompt}],maxTokens:1200})});
-      const json=await res.json();
-      setResult(json.content?.map(b=>b.text||"").join("")||"Erreur de génération.");
-    }catch{setResult("Erreur de connexion. Réessaie dans un instant.");}
-    setPhase("result");
-  };
-
-  // Vue détail d'un outil
-  if(activeTool){
-    return(
-      <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-        <Hdr sub={activeTool.titre.toUpperCase()} accent={activeTool.color} onBack={()=>{setActiveTool(null);setPhase("form");}}/>
-
-        {phase==="form"&&(
-          <div style={{padding:"18px 18px 40px",display:"flex",flexDirection:"column",gap:12}}>
-            {/* Carte outil */}
-            <div style={{background:"#0D0D0D",border:`1px solid ${activeTool.color}22`,borderRadius:10,padding:"13px 16px",display:"flex",gap:10,alignItems:"center"}}>
-              <div style={{width:40,height:40,borderRadius:10,background:`${activeTool.color}15`,border:`1px solid ${activeTool.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{activeTool.icon}</div>
-              <div><div style={{fontSize:11,color:activeTool.color,fontWeight:600,marginBottom:2}}>{activeTool.titre}</div><div style={{fontSize:10,color:"#555",lineHeight:1.4}}>{activeTool.desc}</div></div>
-            </div>
-            {activeTool.fields.map(f=>(
-              <div key={f.k}>
-                <label style={{fontSize:11,color:"#AAA",letterSpacing:1,display:"block",marginBottom:7,fontWeight:600}}>{f.l}</label>
-                {f.k==="hook"?(
-                  <textarea value={formData[f.k]||""} onChange={e=>setFormData(d=>({...d,[f.k]:e.target.value}))} placeholder={f.p} rows={4} style={{width:"100%"}}/>
-                ):(
-                  <input value={formData[f.k]||""} onChange={e=>setFormData(d=>({...d,[f.k]:e.target.value}))} placeholder={f.p}/>
-                )}
-              </div>
-            ))}
-            <button
-              onClick={isLocked?()=>setPhase("locked"):gen}
-              disabled={!isLocked&&activeTool.fields.filter(f=>f.l.includes("*")).some(f=>!formData[f.k]?.trim())}
-              style={{background:isLocked?"#1A1A1A":`linear-gradient(135deg,${activeTool.color},${activeTool.color}CC)`,border:isLocked?`1px solid ${activeTool.color}33`:"none",color:isLocked?activeTool.color:"#000",fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:2,textTransform:"uppercase",padding:"13px 20px",borderRadius:8,cursor:"pointer",fontWeight:600,width:"100%",marginTop:4}}
-            >
-              {isLocked?"🔒 Réservé aux abonnés":`✦ Générer — ${activeTool.titre}`}
-            </button>
-          </div>
-        )}
-
-        {phase==="locked"&&(
-          <div style={{padding:"30px 24px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
-            <div style={{fontSize:40}}>{activeTool.icon}</div>
-            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:3}}>RÉSERVÉ AUX ABONNÉS</div>
-            <div style={{fontSize:11,color:"#555",lineHeight:1.7,maxWidth:280}}>{activeTool.desc}</div>
-            <button className="btn" style={{maxWidth:300,width:"100%"}} onClick={onGoPlan}>S'abonner — 9,90€/mois →</button>
-            <button className="btn-o" style={{maxWidth:300,width:"100%"}} onClick={()=>setPhase("form")}>← Retour</button>
-          </div>
-        )}
-
-        {phase==="loading"&&(
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"55vh",gap:16}}>
-            <div style={{fontSize:32}}>{activeTool.icon}</div>
-            <div style={{fontSize:13,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:3,color:activeTool.color}}>GÉNÉRATION EN COURS</div>
-            <Equalizer color={activeTool.color} bars={5} height={18}/>
-          </div>
-        )}
-
-        {phase==="result"&&(
-          <div style={{padding:"16px 18px 40px"}}>
-            {/* Header résultat */}
-            <div style={{background:"#0D0D0D",border:`1px solid ${activeTool.color}22`,borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:18}}>{activeTool.icon}</span>
-              <div style={{flex:1}}><div style={{fontSize:11,color:activeTool.color,fontWeight:600}}>{activeTool.titre}</div><div style={{fontSize:9,color:"#555"}}>{result.split(/\s+/).filter(Boolean).length} mots</div></div>
-              <button onClick={()=>setPhase("form")} style={{background:"none",border:"1px solid #1A1A1A",color:"#444",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"5px 10px",borderRadius:6,cursor:"pointer"}}>Modifier</button>
-            </div>
-            <div style={{background:"#0D0D0D",border:"1px solid #141414",borderRadius:8,padding:18,fontSize:12,lineHeight:1.9,color:"#BBB",whiteSpace:"pre-wrap",marginBottom:14}}>{result}</div>
-            <div style={{display:"flex",gap:10}}>
-              <button style={{flex:1,background:"none",border:`1px solid ${copied?"#00C9A7":activeTool.color+"44"}`,color:copied?"#00C9A7":activeTool.color,fontFamily:"'Inter',sans-serif",fontSize:11,letterSpacing:2,padding:12,borderRadius:5,cursor:"pointer"}} onClick={()=>{navigator.clipboard.writeText(result);setCopied(true);setTimeout(()=>setCopied(false),2000);}}>
-                {copied?"✓ Copié !":"Copier"}
-              </button>
-              <button className="btn-o" onClick={()=>{setPhase("form");setResult("");}}>↺ Refaire</button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Vue liste des outils
-  return(
-    <div style={{minHeight:"100vh",background:"#080808",color:"#F0EDE8",fontFamily:"'Inter',sans-serif",paddingBottom:80}}>
-      <Hdr sub="IA TOOLS HUB" accent="#845EF7" onBack={onBack}/>
-
-      {/* Intro */}
-      <div style={{padding:"12px 18px 0"}}>
-        <div style={{background:"linear-gradient(135deg,#0D0D0D,#0A0A0A)",border:"1px solid #845EF722",borderRadius:10,padding:"13px 16px",marginBottom:14,display:"flex",gap:12,alignItems:"flex-start",position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#845EF7,#FF6B35)"}}/>
-          <span style={{fontSize:22,flexShrink:0}}>🤖</span>
-          <div>
-            <div style={{fontSize:11,color:"#DDD",fontWeight:600,marginBottom:4}}>{IA_TOOLS.length} outils IA pour artistes indépendants</div>
-            <div style={{fontSize:11,color:"#555",lineHeight:1.6}}>Bio, pitch Spotify, idées contenu, stratégie, email presse… Pré-rempli depuis ton profil artiste.</div>
-          </div>
-        </div>
-
-        {/* Filtre catégories */}
-        <div style={{display:"flex",gap:7,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2,marginBottom:14}}>
-          {CATS_HUB.map(c=>(
-            <button key={c.id} onClick={()=>setCatFilter(c.id)} style={{flexShrink:0,background:catFilter===c.id?"#845EF7":"#111",border:`1px solid ${catFilter===c.id?"#845EF7":"#222"}`,color:catFilter===c.id?"#FFF":"#888",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1.5,padding:"6px 12px",borderRadius:20,cursor:"pointer",fontWeight:catFilter===c.id?700:400,transition:"all 0.2s"}}>
-              {c.i} {c.l.toUpperCase()}
-            </button>
-          ))}
-        </div>
-
-        {/* Grille outils */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {filtered.map((tool,i)=>(
-            <div key={tool.id} className="fu card" style={{padding:0,overflow:"hidden",cursor:"pointer",animationDelay:`${i*0.04}s`,borderColor:`${tool.color}22`}} onClick={()=>openTool(tool)}>
-              <div style={{height:2,background:tool.color}}/>
-              <div style={{padding:"13px 12px"}}>
-                <div style={{width:36,height:36,borderRadius:9,background:`${tool.color}15`,border:`1px solid ${tool.color}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,marginBottom:8}}>{tool.icon}</div>
-                <div style={{fontSize:12,color:"#CCC",fontWeight:600,lineHeight:1.3,marginBottom:5}}>{tool.titre}</div>
-                <div style={{fontSize:10,color:"#444",lineHeight:1.4,marginBottom:8}}>{tool.desc}</div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:8,color:tool.color,background:`${tool.color}15`,padding:"2px 7px",borderRadius:10,letterSpacing:0.5}}>{tool.cat}</span>
-                  {isLocked&&<span style={{fontSize:10,opacity:0.4}}>🔒</span>}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Lien vers outils/distributeurs */}
-        <div style={{marginTop:16,background:"#0A0A0A",border:"1px solid #1A1A1A",borderRadius:10,padding:"12px 16px",display:"flex",gap:10,alignItems:"center"}}>
-          <span style={{fontSize:18}}>🛠️</span>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:11,color:"#888",lineHeight:1.4}}>Tu cherches des distributeurs ou outils externes ?</div>
-          </div>
-          <button onClick={onBack} style={{background:"none",border:"1px solid #222",color:"#555",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,padding:"6px 10px",borderRadius:6,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>Mes Outils →</button>
-        </div>
-
-        {isLocked&&(
-          <div style={{marginTop:12,background:"#0D0D0D",border:"1px solid #845EF733",borderRadius:10,padding:"14px 16px",textAlign:"center"}}>
-            <div style={{fontSize:11,color:"#666",marginBottom:10,lineHeight:1.6}}>Tous les outils IA sont réservés aux abonnés</div>
-            <button className="btn" onClick={onGoPlan}>S'abonner dès 9,90€/mois →</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── PROFIL ──────────────────────────────────────────────────────────────────
 function Profil({plan,setPlan,user,onGoPlan,onBack,onLogin}){
   const PI={free:{l:"DÉCOUVERTE",c:"#999"},artiste:{l:"ARTISTE",c:"#FF6B35"},label:{l:"LABEL",c:"#C8A96E"}};
@@ -3361,8 +2035,6 @@ function Chatbot({plan,onUpgrade,onClose}){
 }
 
 // ─── APP ROOT — état centralisé, navigation propre ───────────────────────────
-
-// ─── APP ROOT — état centralisé, navigation propre ───────────────────────────
 export default function App(){
   // ── État global (1 seul endroit) ──────────────────────────────────────────
   const [screen,  setScreen]  = useState("landing");   // landing | auth | onboarding | paywall | app
@@ -3479,7 +2151,7 @@ export default function App(){
         if(session?.user){
           const {data:profile} = await sb.from("profiles").select("*").eq("id",session.user.id).single();
           if(profile){
-            setUser({id:session.user.id,email:session.user.email,name:profile.name,genre:profile.genre,role:profile.role,niveau:profile.niveau,objectif:profile.objectif});
+            setUser({id:session.user.id,email:session.user.email,name:profile.name,genre:profile.genre});
             setPlan(profile.plan||"free");
             setScreen("app");
           }
@@ -3507,20 +2179,16 @@ export default function App(){
 
   // ── Contenu principal ─────────────────────────────────────────────────────
   const VIEWS = {
-    dashboard:    <Dashboard    projects={projects} setProjects={setProjects} onGoCoach={goCoach} onGoPlan={goPaywall} plan={plan} user={user} onGoView={goTo}/>,
-    coach:        <Coach        projects={projects} setProjects={setProjects} activeId={activeId} setActiveId={setActiveId} plan={plan} onGoPlan={goPaywall} onGoOutils={()=>goTo("outils")}/>,
-    presskit:     <PressKit     projects={projects} plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    booking:      <Booking      plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    bibliotheque: <Bibliotheque plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    subventions:  <Subventions  plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    annuaire:     <Annuaire     plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    actualites:   <Actualites   onBack={goBack}/>,
-    outils:       <Outils       onBack={goBack}/>,
-    iatools:      <IAToolsHub   plan={plan} user={user} projects={projects} onGoPlan={goPaywall} onBack={goBack}/>,
-    tracker:      <StreamingTracker plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    releaseplan:  <ReleasePlan  plan={plan} user={user} projects={projects} onGoPlan={goPaywall} onBack={goBack}/>,
-    calendrier:   <CampaignCalendar plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
-    profil:       <Profil       plan={plan} setPlan={setPlan} user={user} onGoPlan={goPaywall} onBack={goBack} onLogin={()=>setScreen("auth")}/>,
+    dashboard:   <Dashboard    projects={projects} setProjects={setProjects} onGoCoach={goCoach} onGoPlan={goPaywall} plan={plan} user={user}/>,
+    coach:       <Coach        projects={projects} setProjects={setProjects} activeId={activeId} setActiveId={setActiveId} plan={plan} onGoPlan={goPaywall} onGoOutils={()=>goTo("outils")}/>,
+    presskit:    <PressKit     projects={projects} plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    booking:     <Booking      plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    bibliotheque:<Bibliotheque plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    subventions: <Subventions  plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    annuaire:    <Annuaire     plan={plan} onGoPlan={goPaywall} onBack={goBack}/>,
+    actualites:  <Actualites   onBack={goBack}/>,
+    outils:      <Outils       onBack={goBack}/>,
+    profil:      <Profil       plan={plan} setPlan={setPlan} user={user} onGoPlan={goPaywall} onBack={goBack} onLogin={()=>setScreen("auth")}/>,
   };
 
   const NAV=[
@@ -3535,10 +2203,6 @@ export default function App(){
     {id:"subventions", l:"Financement",i:"💰",c:"#F03E3E"},
     {id:"annuaire",    l:"Annuaire",   i:"🗂️",c:"#845EF7"},
     {id:"outils",      l:"Mes outils", i:"🛠️",c:"#1DB954"},
-    {id:"iatools",     l:"IA Tools",   i:"🤖",c:"#845EF7"},
-    {id:"tracker",     l:"Tracker",    i:"📊",c:"#1DB954"},
-    {id:"releaseplan", l:"Release",    i:"📅",c:"#FFD43B"},
-    {id:"calendrier",  l:"Calendrier", i:"🗓️",c:"#74C0FC"},
     {id:"actualites",  l:"Actualités", i:"📰",c:"#74C0FC"},
     {id:"profil",      l:"Compte",     i:"👤",c:"#FF6B35"},
   ];
@@ -3555,7 +2219,7 @@ export default function App(){
     setScreen("app");
   }} onLogin={()=>setScreen("auth")}/></div>;
   if(screen==="auth")       return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Auth onBack={()=>setScreen(user?"app":"landing")} onSuccess={u=>{setUser(u);setPlan(u.plan||"free");setScreen(u.name?"app":"onboarding");}}/></div>;
-  if(screen==="onboarding") return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Onboarding onDone={async(u)=>{const merged={...user,...u};setUser(merged);if(supabase&&merged.id){try{await supabase.from("profiles").update({name:u.name,genre:u.genre,role:u.role||null,niveau:u.niveau||null,objectif:u.objectif||null}).eq("id",merged.id);}catch(e){console.warn(e);}}setScreen("app");}}/></div>;
+  if(screen==="onboarding") return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Onboarding onDone={async(u)=>{const merged={...user,...u};setUser(merged);if(supabase&&merged.id){try{await supabase.from("profiles").update({name:u.name,genre:u.genre}).eq("id",merged.id);}catch(e){console.warn(e);}}setScreen("app");}}/></div>;
   if(screen==="paywall")    return <div style={{background:"#080808",minHeight:"100vh"}}><style>{CSS}</style><Paywall user={user} onNeedAuth={()=>setScreen("auth")} onSelect={async(p)=>{setPlan(p);if(supabase&&user?.id){try{await supabase.from("profiles").update({plan:p}).eq("id",user.id);}catch(e){console.warn(e);}}setScreen("app");}} current={plan}/></div>;
 
   return(
